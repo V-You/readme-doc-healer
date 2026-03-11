@@ -7,6 +7,7 @@ md/*
 *.code-workspace
 tmp
 base_data/
+.tooling/
 
 
 # Byte-compiled / optimized / DLL files
