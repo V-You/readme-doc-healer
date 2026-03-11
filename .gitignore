@@ -6,6 +6,7 @@ bak/
 md/*
 *.code-workspace
 tmp
+base_data/
 
 
 # Byte-compiled / optimized / DLL files
