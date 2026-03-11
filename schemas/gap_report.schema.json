@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gap report",
+  "description": "Output of the diagnose tool -- one report per spec+docs analysis run.",
+  "type": "object",
+  "required": ["spec_path", "docs_path", "generated_at", "summary", "gaps"],
+  "properties": {
+    "spec_path": { "type": "string" },
+    "docs_path": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "summary": {
+      "type": "object",
+      "required": ["total_endpoints", "total_gaps", "by_severity", "by_type"],
+      "properties": {
+        "total_endpoints": { "type": "integer" },
+        "total_gaps": { "type": "integer" },
+        "by_severity": {
+          "type": "object",
+          "required": ["critical", "warning", "info"],
+          "properties": {
+            "critical": { "type": "integer" },
+            "warning": { "type": "integer" },
+            "info": { "type": "integer" }
+          }
+        },
+        "by_type": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "description": "Counts keyed by gap_type value."
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["endpoint", "method", "gap_type", "severity", "message"],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "description": "OpenAPI path template, e.g. /merchants/{merchantId}/channels"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["get", "post", "put", "patch", "delete", "options", "head"]
+          },
+          "operation_id": {
+            "type": ["string", "null"],
+            "description": "The operationId from the OpenAPI spec, if available."
+          },
+          "parameter": {
+            "type": ["string", "null"],
+            "description": "Parameter or field name, if the gap is parameter-level. Null for endpoint-level gaps."
+          },
+          "gap_type": {
+            "type": "string",
+            "enum": [
+              "missing_description",
+              "vague_description",
+              "missing_example",
+              "missing_error_code",
+              "no_business_context",
+              "terminology_drift",
+              "undocumented_endpoint",
+              "doc_spec_mismatch"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable description of the gap."
+          },
+          "spec_value": {
+            "description": "The current value from the spec (if any).",
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "object" },
+              { "type": "array" },
+              { "type": "null" }
+            ]
+          },
+          "doc_snippet": {
+            "type": "string",
+            "description": "Relevant fragment from the legacy doc (if found)."
+          },
+          "doc_source": {
+            "type": "string",
+            "description": "Filename of the legacy doc that matched."
+          },
+          "heuristic": {
+            "type": "boolean",
+            "description": "True if flagged by rule-based heuristic, false if it needs LLM judgment."
+          },
+          "heuristic_reason": {
+            "type": ["string", "null"],
+            "description": "Human-readable rule that fired, e.g. 'description shorter than 25 chars'. Null when heuristic is false."
+          },
+          "needs_llm_review": {
+            "type": "boolean",
+            "description": "True for borderline heuristic cases that would benefit from host-LLM judgment.",
+            "default": false
+          },
+          "status": {
+            "type": "string",
+            "enum": ["accepted", "rejected", "needs_review"],
+            "description": "Review status. Defaults to needs_review for fuzzy matches, accepted for exact matches.",
+            "default": "needs_review"
+          },
+          "match_strategy": {
+            "type": ["string", "null"],
+            "enum": ["path_exact", "filename_fuzzy", "heading_fuzzy", "glossary_alias", "manual", null],
+            "description": "How the legacy doc was matched to this endpoint."
+          },
+          "match_confidence": {
+            "type": ["number", "null"],
+            "description": "Confidence score from 0 to 1 for the doc match. Null when no doc matched.",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "matched_docs": {
+            "type": "array",
+            "description": "All candidate doc matches with provenance, ranked by confidence.",
+            "items": {
+              "type": "object",
+              "required": ["doc_source", "confidence", "strategy"],
+              "properties": {
+                "doc_source": { "type": "string" },
+                "doc_title": { "type": "string" },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                "strategy": { "type": "string" },
+                "matched_terms": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Terms or patterns that produced the match."
+                }
+              }
+            }
+          },
+          "redacted": {
+            "type": "boolean",
+            "description": "True if any field in this gap was redacted.",
+            "default": false
+          }
+        }
+      }
+    }
+  }
+}
