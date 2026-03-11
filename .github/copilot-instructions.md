@@ -13,7 +13,7 @@
 # Code style
 
 - Do NOT use title capitalization in comments etc, use sentence case instead
-- Do NOT use m-dashes in comments, use n-dashes instead (wrapped in spaces)
+- Do NOT use m-dashes in comments, use n-dashes instead: ( – )
 - Do NOT use emojis in comments or code - unless asked (monochrome only)
 - Use the KISS principle in code and comments - "keep it simple"
 - Use the DRY principle in code and comments - "don't repeat yourself"
@@ -21,5 +21,5 @@
 # Writing style
 
 - Do NOT use title capitalization, use sentence case instead
-- Do NOT use m-dashes, use n-dashes instead
-- Do NOT use emojis - unless asked (monochrome only)
+- Do NOT use m-dashes (—), use n-dashes instead ( – )
+- Do NOT use emojis - unless asked (and then monochrome only)
