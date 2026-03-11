@@ -1,12 +1,12 @@
 # ReadMe Doc Healer
 
-An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project -- all from the IDE.
+An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project -- all from the IDE. Uses real data from the ACI Merchant Onboarding API.
 
-Built as a portfolio project for the ReadMe Enterprise Support Engineer position (8C830FBA). Uses real data from the ACI Merchant Onboarding API -- the same migration pain ReadMe's Enterprise SEs help customers solve.
+8C830FBA
 
 ## The 1,252 problem
 
-At ACI Worldwide, the Merchant Onboarding API exposed **1,252 configuration options** across two endpoints. Only half had meaningful descriptions. The Confluence documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all.
+The Merchant Onboarding API exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all.
 
 This tool was built to make that API usable. `diagnose` finds **474 documentation gaps** across 72 operations. `heal` assembles the context so an LLM can write the fix. `audit` checks whether users noticed the improvement.
 
