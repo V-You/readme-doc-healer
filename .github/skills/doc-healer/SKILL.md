@@ -6,6 +6,7 @@ description: >
   generate improved ReadMe-compatible content, push fixes to a ReadMe project,
   or audit a live project for quality signals. Also use when the user mentions
   legacy docs, Confluence exports, gap analysis, doc healing, or ReadMe audit.
+argument-hint: "[API specs] "
 ---
 
 # Doc healer
