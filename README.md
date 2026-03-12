@@ -1,6 +1,6 @@
 # ReadMe Doc Healer
 
-An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project – all from the IDE. Uses real data from the ACI Web API.
+An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project – all from the IDE. Uses source data from the ACI Web API (example project).
 
 <table>
   <thead>
@@ -87,8 +87,8 @@ pip install -e ".[dev]"
 
 # configure local defaults in .env
 # README_API_KEY=rdme_...     # optional - needed for push mode and live audit
-# PROJECT_NAME="ACI"         # display name for the local demo/input project
-# PROJECT_DIR="ACI"          # folder name under base_data/
+# PROJECT_NAME="..."          # display name for the local demo/input project
+# PROJECT_DIR="..."           # folder name under base_data/
 
 # run the server
 readme-doc-healer
@@ -137,9 +137,9 @@ Guide created at https://doc-healer.readme.io/docs/update-merchant-account
 Triage report: 5 worst pages, 5 zero-result searches, 3 negative feedback pages
 ```
 
-## Demo data
+## Source data
 
-The server resolves local demo data from `.env`:
+The server resolves local data from `.env`:
 
 - `PROJECT_NAME`: display label for the local project
 - `PROJECT_DIR`: folder name under `base_data/`
@@ -157,11 +157,9 @@ base_data/
     audit-fixture.json
 ```
 
-Current bundled demo files still exist in the legacy flat `base_data/` layout:
-
 | File | Description |
 |------|-------------|
-| `ACI Web API.best.openapi.yaml` | Merged best-of OpenAPI spec (72 operations, 38 paths) |
+| `[PROJECT_NAME].openapi.yaml` | Merged best-of OpenAPI spec (72 operations, 38 paths) |
 | `Legacy-Documentation/` | Confluence HTML export (68 files) with `index.html` table of contents |
 | `glossary.json` | 25 business terms with aliases, definitions, and context tags |
 | `audit-fixture.json` | Canned metrics for offline audit demo |
