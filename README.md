@@ -192,7 +192,11 @@ VS Code / IDE
 
 #### Doc Healer vs Spec Healer
 
-The OpenAPI specification is checked for vagueness, and rated for quality (`vagueness.py`). The separate `doc_scanner.py` is used for matching, snippet extraction, and finding structured data (param details, examples, error codes). `Heal` does not write back to the OpenAPI spec. The output is the *ReadMe guide page*, pushed to api.readme/v2. Design decision is: *The gap lives in the spec, the fix lands in ReadMe*.
+The OpenAPI specification is checked for vagueness, and rated for quality (`vagueness.py`). The separate `doc_scanner.py` is used for matching, snippet extraction, and finding structured data (param details, examples, error codes). `Heal` does not write back to the OpenAPI spec. The output is the *ReadMe guide page*, pushed to api.readme/v2. Design decision is: *The gap lives in the spec, the fix lands in ReadMe*. Spec Healer is a potential future tool. While this situation is present throughout, it's especially visible for the recently introduced "APO token operations". They are described in the "legacy" (official) documentation, and they work as expected. But: they are missing in the OpenAPI spec, because they have not officially been added to the Postman Collection that the "best version" of the OpenAPI spec is based on. This is exactly the kind of drift we are trying to fix.
+
+#### Config quality
+
+Only very limited details on config quality (key-based calls) are shown in Gap matrix. With 1252 (and growing) possible calls, it would not be useful to show them all. We show only samples, and add short notes. *Labels* and a *collapsible card* are used to distinguish endpoint-gap count and key-level count.
 
 #### Why are missing examples "critical"
 

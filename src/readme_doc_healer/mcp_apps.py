@@ -19,6 +19,7 @@ def render_gap_matrix(report_data: dict[str, Any]) -> str:
     """
     summary = report_data.get("summary", {})
     gaps = report_data.get("gaps", [])
+    config_quality = report_data.get("config_quality", {})
 
     total = summary.get("total_gaps", 0)
     critical = summary.get("by_severity", {}).get("critical", 0)
@@ -26,6 +27,68 @@ def render_gap_matrix(report_data: dict[str, Any]) -> str:
     info = summary.get("by_severity", {}).get("info", 0)
     by_type = summary.get("by_type", {})
     total_endpoints = summary.get("total_endpoints", 0)
+
+    # group gaps by endpoint
+    by_endpoint: dict[str, list[dict]] = {}
+    for gap in gaps:
+        key = f"{gap.get('method', '').upper()} {gap.get('endpoint', '')}"
+        by_endpoint.setdefault(key, []).append(gap)
+
+    # sort endpoints by gap count descending
+    sorted_endpoints = sorted(by_endpoint.items(), key=lambda x: len(x[1]), reverse=True)
+
+    # build config quality card if enabled
+    config_card = ""
+    if config_quality.get("enabled"):
+        ops_assessed = config_quality.get("operations_assessed", 0)
+        lookup_count = config_quality.get("lookup_entry_count", 0)
+        missing_default = config_quality.get("missing_default", 0)
+        brittle_ui_path = config_quality.get("brittle_ui_path", 0)
+        verbose_phrase = config_quality.get("verbose_default_phrase", 0)
+
+        # build sample lists
+        samples_html = ""
+        for gap_type, sample_list in [
+            ("missing_default", config_quality.get("sample_missing_default_keys", [])),
+            ("brittle_ui_path", config_quality.get("sample_brittle_ui_paths", [])),
+            ("verbose_default_phrase", config_quality.get("sample_verbose_default_phrases", [])),
+        ]:
+            if sample_list:
+                label = gap_type.replace("_", " ")
+                sample_items = "<br>".join([f"• {_esc(s)}" for s in sample_list[:5]])
+                samples_html += f"""
+            <div class="config-gap-type">
+              <span class="config-label">{_esc(label)}</span>
+              <div class="config-samples">{sample_items}</div>
+            </div>"""
+
+        config_card = f"""
+  <details class="config-card">
+    <summary>
+      <span class="config-title">Config quality</span>
+      <span class="config-badge">{ops_assessed} operations • {lookup_count} config keys</span>
+    </summary>
+    <div class="config-details">
+      <div class="config-metrics">
+        <div class="config-metric">
+          <span class="config-count">{missing_default}</span>
+          <span class="config-metric-label">missing defaults</span>
+        </div>
+        <div class="config-metric">
+          <span class="config-count">{brittle_ui_path}</span>
+          <span class="config-metric-label">brittle UI paths</span>
+        </div>
+        <div class="config-metric">
+          <span class="config-count">{verbose_phrase}</span>
+          <span class="config-metric-label">verbose defaults</span>
+        </div>
+      </div>
+      <div class="config-samples-section">
+        <div class="config-samples-title">Sample issues by type:</div>
+        {samples_html}
+      </div>
+    </div>
+  </details>"""
 
     # group gaps by endpoint
     by_endpoint: dict[str, list[dict]] = {}
@@ -124,6 +187,28 @@ def render_gap_matrix(report_data: dict[str, Any]) -> str:
   .type-bar {{ height: 100%; background: #58a6ff; border-radius: 3px; transition: width 0.3s; }}
   .type-count {{ width: 32px; font-size: 12px; color: #8b949e; }}
 
+  /* config quality card */
+  .config-card {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                  margin-bottom: 20px; overflow: hidden; }}
+  .config-card summary {{ padding: 8px 12px; cursor: pointer; display: flex;
+                          align-items: center; justify-content: space-between;
+                          font-weight: 600; color: #f0f6fc; }}
+  .config-card summary:hover {{ background: #1c2128; }}
+  .config-title {{ display: flex; align-items: center; gap: 8px; }}
+  .config-badge {{ font-size: 11px; color: #8b949e; font-weight: 400; }}
+  .config-details {{ padding: 12px; border-top: 1px solid #21262d; }}
+  .config-metrics {{ display: flex; gap: 16px; margin-bottom: 12px; }}
+  .config-metric {{ text-align: center; }}
+  .config-count {{ display: block; font-size: 18px; font-weight: 700; color: #58a6ff; }}
+  .config-metric-label {{ display: block; font-size: 11px; color: #8b949e;
+                          text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }}
+  .config-samples-section {{ color: #8b949e; font-size: 12px; }}
+  .config-samples-title {{ font-weight: 600; margin-bottom: 8px; color: #c9d1d9; }}
+  .config-gap-type {{ margin-bottom: 8px; }}
+  .config-label {{ display: inline-block; color: #58a6ff; font-weight: 600; min-width: 120px; }}
+  .config-samples {{ display: inline-block; font-family: 'SF Mono', 'Fira Code', monospace;
+                     font-size: 11px; color: #8b949e; }}
+
   /* endpoint list */
   .endpoint-row {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px;
                    margin-bottom: 4px; overflow: hidden; }}
@@ -167,6 +252,8 @@ def render_gap_matrix(report_data: dict[str, Any]) -> str:
       <div style="color:#58a6ff">&#9679; Info: {info} ({_pct(info, total)}%)</div>
     </div>
   </div>
+
+  {config_card}
 
   <div class="section-title">Gap types</div>
   {type_bars}
@@ -418,6 +505,27 @@ def gap_matrix_template() -> str:
   .type-bar {{ height: 100%; background: #58a6ff; border-radius: 3px; }}
   .type-count {{ width: 32px; font-size: 12px; color: #8b949e; }}
 
+  .config-card {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+                  margin-bottom: 20px; overflow: hidden; }}
+  .config-card summary {{ padding: 8px 12px; cursor: pointer; display: flex;
+                          align-items: center; justify-content: space-between;
+                          font-weight: 600; color: #f0f6fc; }}
+  .config-card summary:hover {{ background: #1c2128; }}
+  .config-title {{ display: flex; align-items: center; gap: 8px; }}
+  .config-badge {{ font-size: 11px; color: #8b949e; font-weight: 400; }}
+  .config-details {{ padding: 12px; border-top: 1px solid #21262d; }}
+  .config-metrics {{ display: flex; gap: 16px; margin-bottom: 12px; }}
+  .config-metric {{ text-align: center; }}
+  .config-count {{ display: block; font-size: 18px; font-weight: 700; color: #58a6ff; }}
+  .config-metric-label {{ display: block; font-size: 11px; color: #8b949e;
+                          text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }}
+  .config-samples-section {{ color: #8b949e; font-size: 12px; }}
+  .config-samples-title {{ font-weight: 600; margin-bottom: 8px; color: #c9d1d9; }}
+  .config-gap-type {{ margin-bottom: 8px; }}
+  .config-label {{ display: inline-block; color: #58a6ff; font-weight: 600; min-width: 120px; }}
+  .config-samples {{ display: inline-block; font-family: 'SF Mono', 'Fira Code', monospace;
+                     font-size: 11px; color: #8b949e; }}
+
   .endpoint-row {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px;
                    margin-bottom: 4px; overflow: hidden; }}
   .endpoint-row summary {{ padding: 8px 12px; cursor: pointer; display: flex;
@@ -469,6 +577,7 @@ def gap_matrix_template() -> str:
       const info = (summary.by_severity || {{}}).info || 0;
       const byType = summary.by_type || {{}};
       const totalEp = summary.total_endpoints || 0;
+      const configQuality = report.config_quality || {{}};
 
       // group gaps by endpoint
       const byEp = {{}};
@@ -477,6 +586,32 @@ def gap_matrix_template() -> str:
         (byEp[key] = byEp[key] || []).push(g);
       }});
       const sorted = Object.entries(byEp).sort((a, b) => b[1].length - a[1].length).slice(0, 30);
+
+      // config quality card
+      let configCard = "";
+      if (configQuality.enabled) {{
+        const opsAssessed = configQuality.operations_assessed || 0;
+        const lookupCount = configQuality.lookup_entry_count || 0;
+        const missingDefault = configQuality.missing_default || 0;
+        const brittleUiPath = configQuality.brittle_ui_path || 0;
+        const verbosePhrase = configQuality.verbose_default_phrase || 0;
+
+        let samplesHtml = "";
+        const gapTypes = [
+          ["missing_default", configQuality.sample_missing_default_keys || []],
+          ["brittle_ui_path", configQuality.sample_brittle_ui_paths || []],
+          ["verbose_default_phrase", configQuality.sample_verbose_default_phrases || []],
+        ];
+        gapTypes.forEach(([gapType, sampleList]) => {{
+          if (sampleList && sampleList.length > 0) {{
+            const label = gapType.replace(/_/g, " ");
+            const samples = sampleList.slice(0, 5).map(s => `• ${{esc(s)}}`).join("<br>");
+            samplesHtml += `<div class="config-gap-type"><span class="config-label">${{esc(label)}}</span><div class="config-samples">${{samples}}</div></div>`;
+          }}
+        }});
+
+        configCard = `<details class="config-card"><summary><span class="config-title">Config quality</span><span class="config-badge">${{opsAssessed}} operations • ${{lookupCount}} config keys</span></summary><div class="config-details"><div class="config-metrics"><div class="config-metric"><span class="config-count">${{missingDefault}}</span><span class="config-metric-label">missing defaults</span></div><div class="config-metric"><span class="config-count">${{brittleUiPath}}</span><span class="config-metric-label">brittle UI paths</span></div><div class="config-metric"><span class="config-count">${{verbosePhrase}}</span><span class="config-metric-label">verbose defaults</span></div></div><div class="config-samples-section"><div class="config-samples-title">Sample issues by type:</div>${{samplesHtml}}</div></div></details>`;
+      }}
 
       // type bars
       const maxType = Math.max(...Object.values(byType), 1);
@@ -518,6 +653,7 @@ def gap_matrix_template() -> str:
             <div style="color:#58a6ff">&#9679; Info: ${{info}} (${{pct(info,total)}}%)</div>
           </div>
         </div>
+        ${{configCard}}
         <div class="section-title">Gap types</div>
         ${{typeBarsHtml}}
         <div class="section-title" style="margin-top:20px">Endpoints (worst first)</div>
