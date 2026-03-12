@@ -27,7 +27,7 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 
 ## Problem
 
-The “Web API” exposes 72 endpoints. Two of them cover 1,252 configuration options (read and set). Not all have meaningful descriptions. Customer documentation has drifted from the spec. The frontend config manuals are not connected to the API calls. Many calls have no dedicated page. This “Doc Healer” MCP server was built to make the API more usable. `Diagnose` finds **474 documentation gaps** across 72 API call operations. `Heal` assembles the context so an LLM can write the fix. `Audit` checks whether users noticed the improvement.
+The “Web API” exposes 72 endpoints. Two of them cover 1,252 configuration options (read and set). Not all have meaningful descriptions. Customer documentation has drifted from the spec. The frontend config manuals are not connected to the API calls. Many calls have no dedicated page. This “Doc Healer” MCP server was built to make the API more usable. `Diagnose` finds **474 documentation gaps** across API call operations, and further gaps across config-calls. `Heal` assembles the context so an LLM can write the fix, and pushes the improved data to ReadMe pages. `Audit` checks whether users noticed the improvement.
 
 ## Tools
 
@@ -196,7 +196,7 @@ The OpenAPI specification is checked for vagueness, and rated for quality (`vagu
 
 #### Config quality
 
-Only very limited details on config quality (key-based calls) are shown in Gap matrix. With 1252 (and growing) possible calls, it would not be useful to show them all. We show only samples, and add short notes. *Labels* and a *collapsible card* are used to distinguish endpoint-gap count and key-level count. The feature is - currently - directly tied to the presence of a file named "riro_consolidated_lookup.json". **Frontend breadcrumbs should be excluded entirely. Or, add a capability to export the full config lookup for external reference. Or, adjust the heal context to generate better linking text.**
+Only very limited details on config quality (key-based calls) are shown in Gap matrix. With 1252 (and growing) possible calls, it would not be useful to show them all. We show only samples, and add short notes. *Labels* and a *collapsible card* are used to distinguish endpoint-gap count and key-level count. The feature is - currently - directly tied to the presence of a file named "riro_consolidated_lookup.json". **Frontend breadcrumbs should be excluded entirely (may even be paid feature). Or, add a capability to export the full config lookup for external reference. Or, adjust the heal context to generate better linking text.**
 
 #### Why are missing examples "critical"
 
