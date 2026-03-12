@@ -2,7 +2,7 @@
 
 An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project – all from the IDE. Uses real data from the ACI Web API.
 
-| `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the endpoint <br>GET /channels/{channelId}  | Push <br>dry run | Before / After |
+| `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the endpoint <br>GET /channels/{channelId}  | Push <br>(after dry run) | Before / After |
 |---|---|---|---|
 | <kbd><img src="img/Screenshot_2026-03-11_220320.webp" alt="Gap matrix" width="111" /></kbd>|<kbd><img src="img/heal_channelid.webp" alt="heal Channel" width="111" /></kbd> | <kbd><img src="img/push.png" alt="Push to readme.com" width="111" /></kbd> | <kbd><img src="img/before-after.webp" alt="A/B" width="111" /></kbd> |
 
