@@ -27,7 +27,7 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 
 ## Problem
 
-The “Web API” exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all. This “Doc Healer” MCP server was built to make that API more usable. `diagnose` finds **474 documentation gaps** across 72 API call operations. `heal` assembles the context so an LLM can write the fix. `audit` checks whether users noticed the improvement.
+The “Web API” exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all. This “Doc Healer” MCP server was built to make that API more usable. `Diagnose` finds **474 documentation gaps** across 72 API call operations. `Heal` assembles the context so an LLM can write the fix. `Audit` checks whether users noticed the improvement.
 
 ## Tools
 
