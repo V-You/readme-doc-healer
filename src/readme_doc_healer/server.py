@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 
 from fastmcp import FastMCP
 from fastmcp.server.apps import AppConfig, ResourceCSP
@@ -67,8 +68,11 @@ def _resolve_local_inputs(
         "exports, markdown, plaintext). Produces a structured gap report identifying "
         "endpoints with missing or vague descriptions, parameters without business "
         "context, missing response examples, undocumented error codes, and "
-        "terminology drift between spec and docs. Returns JSON gap report + "
-        "markdown summary. No API key needed -- local files only."
+        "terminology drift between spec and docs. "
+        "By default returns a compact summary (summary_only=true) with totals, "
+        "config quality metrics, and the 10 worst endpoints -- keeping the response "
+        "small for agent consumption. Pass summary_only=false to include all gaps. "
+        "No API key needed -- local files only."
     ),
     app=AppConfig(resourceUri="ui://doc-healer/gap-matrix.html"),
 )
@@ -76,6 +80,7 @@ def diagnose(
     spec_path: str | None = None,
     docs_path: str | None = None,
     glossary_path: str | None = None,
+    summary_only: bool = True,
 ) -> str:
     """Run gap analysis on an OpenAPI spec against legacy documentation.
 
@@ -83,6 +88,8 @@ def diagnose(
         spec_path: Optional path to OpenAPI JSON/YAML spec file.
         docs_path: Optional path to directory of legacy doc files (HTML, markdown).
         glossary_path: Optional path to glossary JSON for terminology normalization.
+        summary_only: If true (default), return only summary + config_quality +
+            top 10 worst endpoints. Set false to include all gap details.
     """
     settings = get_settings()
     resolved_spec_path, resolved_docs_path, resolved_glossary_path, error = _resolve_local_inputs(
@@ -104,10 +111,51 @@ def diagnose(
         settings=settings,
     )
 
-    result = {
-        "report": report.to_dict(),
-        "markdown": report.to_markdown(),
-    }
+    if summary_only:
+        # group gaps by endpoint, find worst 10 by (critical count, total count)
+        by_ep: dict[str, list[dict]] = {}
+        for gap in report.gaps:
+            key = f"{gap.method.upper()} {gap.endpoint}"
+            by_ep.setdefault(key, []).append({
+                "severity": gap.severity,
+                "gap_type": gap.gap_type,
+                "message": gap.message,
+                "parameter": gap.parameter,
+            })
+        worst = sorted(
+            by_ep.items(),
+            key=lambda x: (
+                -sum(1 for g in x[1] if g["severity"] == "critical"),
+                -len(x[1]),
+            ),
+        )[:10]
+
+        result = {
+            "summary": asdict(report.summary),
+            "config_quality": asdict(report.config_quality),
+            "worst_endpoints": [
+                {
+                    "endpoint": ep,
+                    "critical": sum(1 for g in gaps if g["severity"] == "critical"),
+                    "warning": sum(1 for g in gaps if g["severity"] == "warning"),
+                    "info": sum(1 for g in gaps if g["severity"] == "info"),
+                    "total": len(gaps),
+                    "gaps": gaps,
+                }
+                for ep, gaps in worst
+            ],
+            "markdown": report.to_markdown().split("## Gaps by endpoint")[0].strip(),
+            "hint": (
+                f"Showing top 10 of {len(by_ep)} endpoints. "
+                "Call diagnose(summary_only=false) for all gap details."
+            ),
+        }
+    else:
+        result = {
+            "report": report.to_dict(),
+            "markdown": report.to_markdown(),
+        }
+
     return json.dumps(result, indent=2, default=str)
 
 

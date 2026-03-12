@@ -52,8 +52,13 @@ Find every gap between the spec and the legacy docs.
 diagnose()
 ```
 
-Review the gap report. Focus on critical-severity items first. The report
-includes a markdown summary and structured JSON with per-endpoint details.
+This returns a compact summary (top 10 worst endpoints, totals, config quality).
+To get all gap details for every endpoint, call `diagnose(summary_only=false)` --
+but note this returns a large payload (~2 MB for ACI) that may be spooled to a
+temporary file outside the workspace. Prefer the compact default and use the
+gap matrix UI for visual exploration.
+
+Review the gap report. Focus on critical-severity items first.
 
 If the user does not provide paths, the server resolves them from `.env`
 using `PROJECT_DIR` and `base_data/<PROJECT_DIR>/`.
