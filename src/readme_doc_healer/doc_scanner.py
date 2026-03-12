@@ -31,6 +31,24 @@ class DocExample:
 
 
 @dataclass
+class DocParamConstraint:
+    """A parameter constraint extracted from a legacy doc table."""
+    section: str  # url_parameters, data_parameters, success_response, error_response
+    name: str
+    description: str
+    character: str  # allowed character pattern, e.g. "[a-f 0-9]"
+    length: str  # max length, e.g. "32"
+    required: str  # "Required", "Optional", or ""
+
+
+@dataclass
+class DocErrorCode:
+    """An error code entry from a legacy doc error response table."""
+    code: str  # e.g. "200.*.*"
+    description: str
+
+
+@dataclass
 class ScannedDoc:
     """A single parsed legacy doc file."""
     filename: str
@@ -40,6 +58,8 @@ class ScannedDoc:
     chapter: str
     operation_name: str  # extracted from filename
     examples: list[DocExample] = field(default_factory=list)
+    param_constraints: list[DocParamConstraint] = field(default_factory=list)
+    error_codes: list[DocErrorCode] = field(default_factory=list)
 
 
 def scan_docs_directory(docs_path: str | Path) -> list[ScannedDoc]:
@@ -131,6 +151,9 @@ def _parse_html_doc(path: Path) -> ScannedDoc | None:
     # extract structured example blocks (success response, error response, sample call)
     examples = _extract_examples_from_soup(main_content)
 
+    # extract structured parameter constraints and error codes from inner tables
+    param_constraints, error_codes = _extract_tables_from_soup(main_content)
+
     return ScannedDoc(
         filename=path.name,
         title=title,
@@ -139,6 +162,8 @@ def _parse_html_doc(path: Path) -> ScannedDoc | None:
         chapter=chapter,
         operation_name=operation_name,
         examples=examples,
+        param_constraints=param_constraints,
+        error_codes=error_codes,
     )
 
 
@@ -183,6 +208,97 @@ def _extract_examples_from_soup(main_content) -> list[DocExample]:
                 break
 
     return examples
+
+
+def _extract_tables_from_soup(
+    main_content,
+) -> tuple[list[DocParamConstraint], list[DocErrorCode]]:
+    """Extract structured parameter constraints and error codes from inner tables.
+
+    ACI Confluence docs nest detail tables inside main table rows. Each outer
+    <th> marks a section (URL parameters, Data parameters, Success response,
+    Error response). Inner tables contain columns like Name, Character, Length
+    or Response code, Description.
+    """
+    if main_content is None:
+        return [], []
+
+    constraints: list[DocParamConstraint] = []
+    error_codes: list[DocErrorCode] = []
+
+    _SECTION_MAP = {
+        "url parameters": "url_parameters",
+        "data parameters": "data_parameters",
+        "success response": "success_response",
+        "error response": "error_response",
+    }
+
+    for th in main_content.find_all("th"):
+        heading = th.get_text(strip=True).lower()
+        section_key = _SECTION_MAP.get(heading)
+        if not section_key:
+            continue
+
+        tr = th.parent
+        if not tr:
+            continue
+        td = tr.find("td")
+        if not td:
+            continue
+
+        # iterate inner tables within this section
+        for inner_table in td.find_all("table"):
+            headers = [
+                h.get_text(strip=True).lower()
+                for h in inner_table.find_all("th")
+            ]
+            if not headers:
+                continue
+
+            # error code table (Response code | Description)
+            if "response code" in headers:
+                code_idx = headers.index("response code")
+                desc_idx = headers.index("description") if "description" in headers else None
+                for row in inner_table.find_all("tr"):
+                    cells = row.find_all("td")
+                    if len(cells) <= code_idx:
+                        continue
+                    code = cells[code_idx].get_text(strip=True)
+                    desc = cells[desc_idx].get_text(strip=True) if desc_idx is not None and len(cells) > desc_idx else ""
+                    if code:
+                        error_codes.append(DocErrorCode(code=code, description=desc))
+                continue
+
+            # parameter constraint table (Name | Description | Character | Length [| Required])
+            if "name" in headers and "character" in headers:
+                name_idx = headers.index("name")
+                desc_idx = headers.index("description") if "description" in headers else None
+                char_idx = headers.index("character")
+                len_idx = headers.index("length") if "length" in headers else None
+                req_idx = headers.index("required") if "required" in headers else None
+
+                for row in inner_table.find_all("tr"):
+                    cells = row.find_all("td")
+                    if len(cells) <= name_idx:
+                        continue
+                    name = cells[name_idx].get_text(strip=True)
+                    if not name:
+                        continue
+                    desc = cells[desc_idx].get_text(strip=True) if desc_idx is not None and len(cells) > desc_idx else ""
+                    char = cells[char_idx].get_text(strip=True) if len(cells) > char_idx else ""
+                    length = cells[len_idx].get_text(strip=True) if len_idx is not None and len(cells) > len_idx else ""
+                    required = cells[req_idx].get_text(strip=True) if req_idx is not None and len(cells) > req_idx else ""
+
+                    constraints.append(DocParamConstraint(
+                        section=section_key,
+                        name=name,
+                        description=desc,
+                        character=char,
+                        length=length,
+                        required=required,
+                    ))
+
+    return constraints, error_codes
 
 
 def _find_endpoint_paths(text: str) -> list[str]:

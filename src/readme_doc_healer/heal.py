@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 
 from .config import Settings, get_settings
 from .diagnose import run_diagnose
-from .doc_scanner import DocExample, ScannedDoc, match_docs_to_operation, scan_docs_directory
+from .doc_scanner import DocExample, DocParamConstraint, DocErrorCode, ScannedDoc, match_docs_to_operation, scan_docs_directory
 from .gap_report import Gap, GapReport
 from .glossary import Glossary, load_glossary
 from .redaction import redact_text
@@ -52,6 +52,8 @@ class HealContext:
     spec_fragment: dict[str, Any]
     legacy_doc_snippets: list[dict[str, Any]]
     legacy_examples: list[dict[str, Any]]
+    legacy_param_constraints: list[dict[str, Any]]
+    legacy_error_codes: list[dict[str, Any]]
     gap_entries: list[dict[str, Any]]
     workflow_candidates: list[dict[str, Any]]
     summary: dict[str, Any]
@@ -105,6 +107,10 @@ def run_heal(
     # extract structured examples from matched legacy docs
     legacy_examples = _build_legacy_examples(doc_matches, docs)
 
+    # extract structured parameter constraints and error codes
+    legacy_param_constraints = _build_legacy_param_constraints(doc_matches, docs)
+    legacy_error_codes = _build_legacy_error_codes(doc_matches, docs)
+
     # detect workflow candidates
     workflows = _detect_workflows(operation, spec, docs, glossary, docs_path)
 
@@ -117,6 +123,8 @@ def run_heal(
         "matched_docs": len(doc_matches),
         "workflow_candidates": len(workflows),
         "legacy_examples_found": len(legacy_examples),
+        "legacy_param_constraints_found": len(legacy_param_constraints),
+        "legacy_error_codes_found": len(legacy_error_codes),
     }
 
     context = HealContext(
@@ -126,6 +134,8 @@ def run_heal(
         spec_fragment=spec_fragment,
         legacy_doc_snippets=legacy_snippets,
         legacy_examples=legacy_examples,
+        legacy_param_constraints=legacy_param_constraints,
+        legacy_error_codes=legacy_error_codes,
         gap_entries=endpoint_gaps,
         workflow_candidates=[asdict(w) for w in workflows],
         summary=summary,
@@ -140,6 +150,8 @@ def run_heal(
         "spec_fragment": spec_fragment,
         "legacy_doc_snippets": legacy_snippets,
         "legacy_examples": legacy_examples,
+        "legacy_param_constraints": legacy_param_constraints,
+        "legacy_error_codes": legacy_error_codes,
         "gap_entries": endpoint_gaps,
         "workflow_candidates": [asdict(w) for w in workflows],
     }
@@ -270,6 +282,62 @@ def _build_legacy_examples(
             })
 
     return examples
+
+
+def _build_legacy_param_constraints(
+    doc_matches: list,
+    docs: list[ScannedDoc],
+) -> list[dict[str, Any]]:
+    """Extract structured parameter constraints from matched legacy docs."""
+    constraints: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    for match in doc_matches:
+        full_doc = next((d for d in docs if d.filename == match.doc_source), None)
+        if not full_doc:
+            continue
+        for pc in full_doc.param_constraints:
+            key = (match.doc_source, pc.section, pc.name)
+            if key in seen:
+                continue
+            seen.add(key)
+            constraints.append({
+                "doc_source": match.doc_source,
+                "section": pc.section,
+                "name": pc.name,
+                "description": pc.description,
+                "character": pc.character,
+                "length": pc.length,
+                "required": pc.required,
+            })
+
+    return constraints
+
+
+def _build_legacy_error_codes(
+    doc_matches: list,
+    docs: list[ScannedDoc],
+) -> list[dict[str, Any]]:
+    """Extract structured error codes from matched legacy docs."""
+    codes: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for match in doc_matches:
+        full_doc = next((d for d in docs if d.filename == match.doc_source), None)
+        if not full_doc:
+            continue
+        for ec in full_doc.error_codes:
+            key = (match.doc_source, ec.code)
+            if key in seen:
+                continue
+            seen.add(key)
+            codes.append({
+                "doc_source": match.doc_source,
+                "code": ec.code,
+                "description": ec.description,
+            })
+
+    return codes
 
 
 def _extract_relevant_section(text: str, endpoint_path: str, context_chars: int = 1500) -> str:
