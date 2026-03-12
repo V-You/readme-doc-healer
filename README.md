@@ -4,7 +4,7 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 
 | `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the endpoint <br>GET /channels/{channelId}  | Run the full diagnose-heal-audit loop <br>on the demo data |
 |---|---|---|
-| <kbd><img src="img/Screenshot_2026-03-11_220320.png" alt="Gap matrix" width="99" /></kbd>|<kbd><img src="img/" alt="" width="" /></kbd> | <kbd><img src="img/" alt="" width="" /></kbd> |
+| <kbd><img src="img/Screenshot_2026-03-11_220320.webp" alt="Gap matrix" width="99" /></kbd>|<kbd><img src="img/" alt="" width="" /></kbd> | <kbd><img src="img/" alt="" width="" /></kbd> |
 
 
 
@@ -171,7 +171,10 @@ VS Code / IDE
 +------------------------------------------+
 ```
 
-Key decision: `heal` does NOT call an LLM. It assembles context, and the host LLM generates the documentation.
+### Decisions
+- `heal` does NOT call an LLM. It assembles context, and the host LLM generates the documentation.
+- Missing examples in OpenAPI are flagged as **critical**, even when present in auxiliary docs. OpenAPI 3.x has explicit example fields on media type objects and schema objects. Tools like ReadMe, Swagger UI, Redocly render them. The spec missing examples is a genuine gap that needs to be healed.
+- ...
 
 ## Tech stack
 
