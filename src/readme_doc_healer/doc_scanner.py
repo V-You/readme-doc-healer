@@ -24,6 +24,13 @@ class DocMatch:
 
 
 @dataclass
+class DocExample:
+    """An example block extracted from a legacy doc."""
+    kind: str  # success_response, error_response, sample_call
+    body: str  # raw text of the example (JSON, curl, etc.)
+
+
+@dataclass
 class ScannedDoc:
     """A single parsed legacy doc file."""
     filename: str
@@ -32,6 +39,7 @@ class ScannedDoc:
     endpoint_paths_found: list[str]  # literal paths found in the text
     chapter: str
     operation_name: str  # extracted from filename
+    examples: list[DocExample] = field(default_factory=list)
 
 
 def scan_docs_directory(docs_path: str | Path) -> list[ScannedDoc]:
@@ -120,6 +128,9 @@ def _parse_html_doc(path: Path) -> ScannedDoc | None:
     # parse filename convention: NN-Operation-Name_PageID.html
     chapter, operation_name = _parse_filename(path.name)
 
+    # extract structured example blocks (success response, error response, sample call)
+    examples = _extract_examples_from_soup(main_content)
+
     return ScannedDoc(
         filename=path.name,
         title=title,
@@ -127,7 +138,51 @@ def _parse_html_doc(path: Path) -> ScannedDoc | None:
         endpoint_paths_found=endpoint_paths,
         chapter=chapter,
         operation_name=operation_name,
+        examples=examples,
     )
+
+
+def _extract_examples_from_soup(main_content) -> list[DocExample]:
+    """Extract structured example blocks from legacy doc HTML.
+
+    Looks for table rows (<tr>) headed by "Success response", "Error response",
+    or "Sample call" -- the pattern used in ACI Confluence exports. Within each
+    row, finds the "Example" label and collects all subsequent text.
+    """
+    if main_content is None:
+        return []
+
+    examples: list[DocExample] = []
+
+    _SECTION_MARKERS = {
+        "success response": "success_response",
+        "error response": "error_response",
+        "sample call": "sample_call",
+    }
+
+    for th in main_content.find_all("th"):
+        heading = th.get_text(strip=True).lower()
+        kind = _SECTION_MARKERS.get(heading)
+        if not kind:
+            continue
+
+        tr = th.parent
+        if not tr:
+            continue
+
+        # get the row text with newline separators so we can find "Example"
+        full_text = tr.get_text(separator="\n", strip=True)
+        lines = full_text.split("\n")
+
+        # scan for a line that is exactly "Example"
+        for i, line in enumerate(lines):
+            if line.strip().lower() == "example":
+                body = "\n".join(lines[i + 1:]).strip()
+                if body:
+                    examples.append(DocExample(kind=kind, body=body))
+                break
+
+    return examples
 
 
 def _find_endpoint_paths(text: str) -> list[str]:

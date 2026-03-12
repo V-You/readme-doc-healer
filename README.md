@@ -173,7 +173,7 @@ VS Code / IDE
 
 ### Decisions
 - `heal` does NOT call an LLM. It assembles context, and the host LLM generates the documentation.
-- Missing examples in OpenAPI are flagged as **critical**, even when present in auxiliary docs. OpenAPI 3.x has explicit example fields on media type objects and schema objects. Tools like ReadMe, Swagger UI, Redocly render them. The spec missing examples is a genuine gap that needs to be healed.
+- Missing examples in OpenAPI are flagged as **critical**, even when examples do exist in auxiliary docs. OpenAPI 3.x has explicit example fields on media type objects and schema objects. Tools like ReadMe, Swagger UI, Redocly render them. The spec missing examples is a genuine gap that needs to be healed. The *gap message* will note when a matched legacy doc has examples available (so the user/LLM knows where to source the fix). The *heal step* extracts the actual example JSON from legacy HTML (success response, error response, sample call) for the LLM to propose adding them to the OpenAPI spec.
 - ...
 
 ## Tech stack

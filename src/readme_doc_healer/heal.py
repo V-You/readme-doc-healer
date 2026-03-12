@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 
 from .config import Settings, get_settings
 from .diagnose import run_diagnose
-from .doc_scanner import ScannedDoc, match_docs_to_operation, scan_docs_directory
+from .doc_scanner import DocExample, ScannedDoc, match_docs_to_operation, scan_docs_directory
 from .gap_report import Gap, GapReport
 from .glossary import Glossary, load_glossary
 from .redaction import redact_text
@@ -51,6 +51,7 @@ class HealContext:
     operation_id: str | None
     spec_fragment: dict[str, Any]
     legacy_doc_snippets: list[dict[str, Any]]
+    legacy_examples: list[dict[str, Any]]
     gap_entries: list[dict[str, Any]]
     workflow_candidates: list[dict[str, Any]]
     summary: dict[str, Any]
@@ -101,6 +102,9 @@ def run_heal(
     # build legacy doc snippets (with redaction)
     legacy_snippets = _build_legacy_snippets(doc_matches, docs, operation, settings)
 
+    # extract structured examples from matched legacy docs
+    legacy_examples = _build_legacy_examples(doc_matches, docs)
+
     # detect workflow candidates
     workflows = _detect_workflows(operation, spec, docs, glossary, docs_path)
 
@@ -112,6 +116,7 @@ def run_heal(
         "critical_gaps": sum(1 for g in endpoint_gaps if g["severity"] == "critical"),
         "matched_docs": len(doc_matches),
         "workflow_candidates": len(workflows),
+        "legacy_examples_found": len(legacy_examples),
     }
 
     context = HealContext(
@@ -120,6 +125,7 @@ def run_heal(
         operation_id=operation.operation_id,
         spec_fragment=spec_fragment,
         legacy_doc_snippets=legacy_snippets,
+        legacy_examples=legacy_examples,
         gap_entries=endpoint_gaps,
         workflow_candidates=[asdict(w) for w in workflows],
         summary=summary,
@@ -133,6 +139,7 @@ def run_heal(
         "summary": summary,
         "spec_fragment": spec_fragment,
         "legacy_doc_snippets": legacy_snippets,
+        "legacy_examples": legacy_examples,
         "gap_entries": endpoint_gaps,
         "workflow_candidates": [asdict(w) for w in workflows],
     }
@@ -237,6 +244,32 @@ def _build_legacy_snippets(
         })
 
     return snippets
+
+
+def _build_legacy_examples(
+    doc_matches: list,
+    docs: list[ScannedDoc],
+) -> list[dict[str, Any]]:
+    """Extract structured examples from matched legacy docs."""
+    examples: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for match in doc_matches:
+        full_doc = next((d for d in docs if d.filename == match.doc_source), None)
+        if not full_doc:
+            continue
+        for ex in full_doc.examples:
+            key = (match.doc_source, ex.kind)
+            if key in seen:
+                continue
+            seen.add(key)
+            examples.append({
+                "doc_source": match.doc_source,
+                "kind": ex.kind,
+                "body": ex.body,
+            })
+
+    return examples
 
 
 def _extract_relevant_section(text: str, endpoint_path: str, context_chars: int = 1500) -> str:

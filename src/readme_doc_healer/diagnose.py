@@ -47,7 +47,7 @@ def run_diagnose(
         _check_endpoint_gaps(operation, doc_matches, best_match, report, settings)
         _check_parameter_gaps(operation, doc_matches, best_match, report, settings)
         _check_request_body_gaps(operation, doc_matches, best_match, report, settings)
-        _check_example_gaps(operation, doc_matches, best_match, report, settings)
+        _check_example_gaps(operation, doc_matches, best_match, report, settings, docs)
         _check_error_code_gaps(operation, doc_matches, best_match, report, settings)
 
         # check for undocumented endpoint
@@ -163,16 +163,38 @@ def _check_example_gaps(
     best_match: DocMatch | None,
     report: GapReport,
     settings: Settings,
+    docs: list[ScannedDoc] | None = None,
 ) -> None:
     """Check for missing request/response examples."""
+    # check whether matched legacy docs have examples we can source from
+    legacy_has_success = False
+    legacy_has_error = False
+    legacy_has_sample = False
+    legacy_source = ""
+    if docs and best_match:
+        matched_doc = next((d for d in docs if d.filename == best_match.doc_source), None)
+        if matched_doc:
+            for ex in matched_doc.examples:
+                if ex.kind == "success_response":
+                    legacy_has_success = True
+                elif ex.kind == "error_response":
+                    legacy_has_error = True
+                elif ex.kind == "sample_call":
+                    legacy_has_sample = True
+            if legacy_has_success or legacy_has_error or legacy_has_sample:
+                legacy_source = matched_doc.filename
+
     if not op.has_request_example and op.request_body_properties:
         severity = _apply_severity_modifiers("missing_example", "warning", op)
+        hint = ""
+        if legacy_has_sample:
+            hint = f" (legacy doc '{legacy_source}' has a sample call that may contain a request body)"
         gap = _make_gap(
             operation=op,
             gap_type="missing_example",
             severity=severity,
-            message=f"No request example for {op.method.upper()} {op.path}",
-            heuristic_reason="no request body example found in spec",
+            message=f"No request example for {op.method.upper()} {op.path}{hint}",
+            heuristic_reason=f"no request body example found in spec{hint}",
             doc_matches=doc_matches,
             best_match=best_match,
         )
@@ -180,12 +202,15 @@ def _check_example_gaps(
 
     if not op.has_response_example:
         severity = _apply_severity_modifiers("missing_example", "warning", op)
+        hint = ""
+        if legacy_has_success:
+            hint = f" (legacy doc '{legacy_source}' has a success response example)"
         gap = _make_gap(
             operation=op,
             gap_type="missing_example",
             severity=severity,
-            message=f"No response example for {op.method.upper()} {op.path}",
-            heuristic_reason="no response example found in spec",
+            message=f"No response example for {op.method.upper()} {op.path}{hint}",
+            heuristic_reason=f"no response example found in spec{hint}",
             doc_matches=doc_matches,
             best_match=best_match,
         )
