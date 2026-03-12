@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     docs_path: Optional[str] = None
     glossary_path: Optional[str] = None
     audit_fixture_path: Optional[str] = None
+    recipes_path: Optional[str] = None
     redact_patterns: str = ""
     redact_allowlist: str = ""
     allow_category_create: bool = False
@@ -106,6 +107,13 @@ class Settings(BaseSettings):
             self.data_search_roots,
             "audit-fixture.json",
         )
+
+    @property
+    def resolved_recipes_path(self) -> str | None:
+        """Resolved recipes path from explicit config or the active project folder."""
+        if self.recipes_path:
+            return self.recipes_path
+        return _find_named_file(self.data_search_roots, "settings_recipes.json")
 
 
 # built-in redaction patterns -- api keys, tokens, emails, secrets

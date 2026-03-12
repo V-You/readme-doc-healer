@@ -7,6 +7,7 @@ from .config_profile import ConfigProfile, build_config_gap_specs, is_config_ope
 from .doc_scanner import DocMatch, ScannedDoc, match_docs_to_operation, scan_docs_directory
 from .gap_report import Gap, GapReport, MatchedDoc
 from .glossary import Glossary, load_glossary
+from .recipes import load_recipe_catalog, validate_recipe_catalog
 from .redaction import redact_dict
 from .spec_parser import Operation, parse_spec
 from .vagueness import (
@@ -20,6 +21,7 @@ def run_diagnose(
     spec_path: str,
     docs_path: str,
     glossary_path: str | None = None,
+    recipes_path: str | None = None,
     settings: Settings | None = None,
 ) -> GapReport:
     """Run the full diagnose pipeline: parse spec, scan docs, match, detect gaps."""
@@ -28,6 +30,7 @@ def run_diagnose(
         settings = get_settings()
 
     glossary_path = glossary_path or settings.resolved_glossary_path
+    recipes_path = recipes_path or settings.resolved_recipes_path
 
     # parse
     spec = parse_spec(spec_path)
@@ -35,11 +38,27 @@ def run_diagnose(
     glossary = load_glossary(glossary_path) if glossary_path else Glossary(entries=[])
     config_profile = load_config_profile(docs_path)
 
+    # load and validate recipes (optional – no error if missing)
+    recipe_catalog = None
+    recipe_validation = None
+    if recipes_path:
+        try:
+            recipe_catalog = load_recipe_catalog(recipes_path)
+        except (ValueError, OSError):
+            recipe_catalog = None
+        if recipe_catalog and recipe_catalog.recipes:
+            recipe_validation = validate_recipe_catalog(
+                recipe_catalog, config_profile.entries, spec
+            )
+            recipe_validation.summary.source_path = recipes_path
+
     # build the gap report
     report = GapReport(
         spec_path=spec_path,
         docs_path=docs_path,
         config_quality=config_profile.summary,
+        recipe_quality=recipe_validation.summary if recipe_validation else None,
+        recipe_issues=recipe_validation.issues if recipe_validation else [],
     )
     config_operations_assessed = 0
 

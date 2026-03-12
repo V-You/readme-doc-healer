@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.server.apps import AppConfig, ResourceCSP
@@ -70,8 +71,9 @@ def _resolve_local_inputs(
         "context, missing response examples, undocumented error codes, and "
         "terminology drift between spec and docs. "
         "By default returns a compact summary (summary_only=true) with totals, "
-        "config quality metrics, and the 10 worst endpoints -- keeping the response "
-        "small for agent consumption. Pass summary_only=false to include all gaps. "
+        "config quality metrics, recipe quality metrics, and the 10 worst "
+        "endpoints -- keeping the response small for agent consumption. "
+        "Pass summary_only=false to include all gaps. "
         "No API key needed -- local files only."
     ),
     app=AppConfig(resourceUri="ui://doc-healer/gap-matrix.html"),
@@ -80,6 +82,7 @@ def diagnose(
     spec_path: str | None = None,
     docs_path: str | None = None,
     glossary_path: str | None = None,
+    recipes_path: str | None = None,
     summary_only: bool = True,
 ) -> str:
     """Run gap analysis on an OpenAPI spec against legacy documentation.
@@ -88,8 +91,9 @@ def diagnose(
         spec_path: Optional path to OpenAPI JSON/YAML spec file.
         docs_path: Optional path to directory of legacy doc files (HTML, markdown).
         glossary_path: Optional path to glossary JSON for terminology normalization.
+        recipes_path: Optional path to settings_recipes.json for recipe quality analysis.
         summary_only: If true (default), return only summary + config_quality +
-            top 10 worst endpoints. Set false to include all gap details.
+            recipe_quality + top 10 worst endpoints. Set false to include all gap details.
     """
     settings = get_settings()
     resolved_spec_path, resolved_docs_path, resolved_glossary_path, error = _resolve_local_inputs(
@@ -104,10 +108,13 @@ def diagnose(
     assert resolved_spec_path is not None
     assert resolved_docs_path is not None
 
+    resolved_recipes_path = recipes_path or settings.resolved_recipes_path
+
     report = run_diagnose(
         spec_path=resolved_spec_path,
         docs_path=resolved_docs_path,
         glossary_path=resolved_glossary_path,
+        recipes_path=resolved_recipes_path,
         settings=settings,
     )
 
@@ -130,7 +137,7 @@ def diagnose(
             ),
         )[:10]
 
-        result = {
+        result: dict[str, Any] = {
             "summary": asdict(report.summary),
             "config_quality": asdict(report.config_quality),
             "worst_endpoints": [
@@ -150,6 +157,33 @@ def diagnose(
                 "Call diagnose(summary_only=false) for all gap details."
             ),
         }
+
+        # add recipe quality if available
+        if report.recipe_quality is not None:
+            result["recipe_quality"] = asdict(report.recipe_quality)
+            # compute worst recipes by issue count
+            issues_by_recipe: dict[str, list[dict]] = {}
+            for ri in report.recipe_issues:
+                issues_by_recipe.setdefault(ri.recipe_id, []).append({
+                    "severity": ri.severity,
+                    "issue_type": ri.issue_type,
+                    "message": ri.message,
+                    "field": ri.field,
+                })
+            worst_recipes = sorted(
+                issues_by_recipe.items(),
+                key=lambda x: (
+                    -sum(1 for i in x[1] if i["severity"] == "warning"),
+                    -len(x[1]),
+                ),
+            )[:5]
+            result["worst_recipes"] = [
+                {"recipe_id": rid, "issues": issues, "total": len(issues)}
+                for rid, issues in worst_recipes
+            ]
+            result["recipe_hint"] = (
+                "Use heal_recipe(recipe_id=...) to generate recipe documentation."
+            )
     else:
         result = {
             "report": report.to_dict(),

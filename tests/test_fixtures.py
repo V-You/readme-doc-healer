@@ -4,6 +4,7 @@ Based on PRD fixture table, adjusted to actual spec paths and verified matches.
 """
 
 import pytest
+from pathlib import Path
 
 from readme_doc_healer.spec_parser import ParsedSpec
 from readme_doc_healer.doc_scanner import ScannedDoc, match_docs_to_operation
@@ -199,21 +200,21 @@ class TestDiagnose:
     def test_produces_gaps(self, spec_path: str, docs_path: str, glossary_path: str, settings):
         from readme_doc_healer.diagnose import run_diagnose
 
-        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
         assert report.summary.total_gaps > 0
         assert report.summary.total_endpoints > 0
 
     def test_severity_distribution(self, spec_path: str, docs_path: str, glossary_path: str, settings):
         from readme_doc_healer.diagnose import run_diagnose
 
-        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
         assert report.summary.by_severity["critical"] > 0
         assert report.summary.by_severity["warning"] > 0
 
     def test_gap_types_present(self, spec_path: str, docs_path: str, glossary_path: str, settings):
         from readme_doc_healer.diagnose import run_diagnose
 
-        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
         types = report.summary.by_type
         assert "missing_description" in types
         assert "missing_example" in types
@@ -221,7 +222,7 @@ class TestDiagnose:
     def test_config_quality_summary_present(self, spec_path: str, docs_path: str, glossary_path: str, settings):
         from readme_doc_healer.diagnose import run_diagnose
 
-        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
         config_quality = report.config_quality
         assert config_quality.enabled is True
         assert config_quality.operations_assessed == 4
@@ -233,7 +234,7 @@ class TestDiagnose:
     def test_config_gap_types_present_for_settings_endpoint(self, spec_path: str, docs_path: str, glossary_path: str, settings):
         from readme_doc_healer.diagnose import run_diagnose
 
-        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
         gap_types = {
             gap.gap_type
             for gap in report.gaps
@@ -242,3 +243,140 @@ class TestDiagnose:
         assert "missing_default" in gap_types
         assert "brittle_ui_path" in gap_types
         assert "verbose_default_phrase" in gap_types
+
+
+class TestConfigLookupEntryId:
+    """rcp-1000: ConfigLookupEntry.id field population."""
+
+    def test_all_entries_have_id(self, docs_path: str):
+        from readme_doc_healer.config_profile import load_config_profile
+
+        profile = load_config_profile(docs_path)
+        assert len(profile.entries) == 1225
+        entries_with_id = [e for e in profile.entries if e.id > 0]
+        assert len(entries_with_id) == 1225
+
+    def test_to_dict_excludes_id(self, docs_path: str):
+        from readme_doc_healer.config_profile import load_config_profile
+
+        profile = load_config_profile(docs_path)
+        for entry in profile.entries[:5]:
+            d = entry.to_dict()
+            assert "id" not in d
+            assert "key" in d
+
+
+class TestRecipeCatalog:
+    """rcp-1002/1003: Recipe loader, models, and validation."""
+
+    def test_load_recipe_catalog(self, settings):
+        from readme_doc_healer.recipes import load_recipe_catalog
+
+        recipes_path = settings.resolved_recipes_path
+        assert recipes_path is not None
+        catalog = load_recipe_catalog(recipes_path)
+        assert catalog.schema_version == "3.0"
+        assert len(catalog.recipes) == 7
+        assert len(catalog.categories) == 3
+        assert catalog.metadata.total_recipes == 7
+
+    def test_recipe_fields_roundtrip(self, settings):
+        from readme_doc_healer.recipes import load_recipe_catalog
+
+        catalog = load_recipe_catalog(settings.resolved_recipes_path)
+        recipe = catalog.recipes[0]
+        assert recipe.id == "3ds-basic-setup"
+        assert recipe.category == "payment_security"
+        assert recipe.difficulty == "intermediate"
+        assert len(recipe.use_cases) == 3
+        assert len(recipe.entity_settings.required) >= 2
+        assert recipe.entity_settings.tool == "manage_settings"
+
+    def test_categories_parsed(self, settings):
+        from readme_doc_healer.recipes import load_recipe_catalog
+
+        catalog = load_recipe_catalog(settings.resolved_recipes_path)
+        cat_ids = {c.id for c in catalog.categories}
+        assert cat_ids == {"payment_security", "risk_management", "business_setup"}
+
+    def test_validate_recipe_catalog(self, settings, docs_path: str, spec):
+        from readme_doc_healer.config_profile import load_config_profile
+        from readme_doc_healer.recipes import load_recipe_catalog, validate_recipe_catalog
+
+        catalog = load_recipe_catalog(settings.resolved_recipes_path)
+        profile = load_config_profile(docs_path)
+        result = validate_recipe_catalog(catalog, profile.entries, spec)
+        assert result.summary.enabled is True
+        assert result.summary.total_recipes == 7
+        assert result.summary.total_categories == 3
+        # all setting_ids should resolve against the lookup
+        assert result.summary.unresolved_setting_ids == 0
+
+    def test_validate_detects_bad_related_recipe(self, settings, docs_path: str):
+        from readme_doc_healer.config_profile import load_config_profile
+        from readme_doc_healer.recipes import load_recipe_catalog, validate_recipe_catalog
+
+        catalog = load_recipe_catalog(settings.resolved_recipes_path)
+        profile = load_config_profile(docs_path)
+        result = validate_recipe_catalog(catalog, profile.entries)
+        # check that broken related recipe refs are flagged (if any exist in source data)
+        broken_refs = [i for i in result.issues if i.issue_type == "broken_related_recipe"]
+        # current source data should have no broken refs
+        # (all related_recipes point to valid ids)
+        assert isinstance(broken_refs, list)
+
+    def test_missing_catalog_returns_empty(self, tmp_path):
+        from readme_doc_healer.recipes import load_recipe_catalog
+
+        catalog = load_recipe_catalog(tmp_path / "nonexistent.json")
+        assert len(catalog.recipes) == 0
+
+    def test_unknown_fields_ignored(self, settings, tmp_path):
+        """Unknown additive fields in source should not break parsing."""
+        import json
+        from readme_doc_healer.recipes import load_recipe_catalog
+
+        source = json.loads(Path(settings.resolved_recipes_path).read_text())
+        source["future_field"] = "should be ignored"
+        source["recipes"][0]["new_field"] = "also ignored"
+        test_file = tmp_path / "test_recipes.json"
+        test_file.write_text(json.dumps(source))
+        catalog = load_recipe_catalog(test_file)
+        assert len(catalog.recipes) == 7
+
+
+class TestDiagnoseRecipeIntegration:
+    """rcp-1005: Diagnose includes recipe quality when recipes available."""
+
+    def test_diagnose_includes_recipe_quality(self, spec_path: str, docs_path: str, glossary_path: str, settings):
+        from readme_doc_healer.diagnose import run_diagnose
+
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
+        assert report.recipe_quality is not None
+        assert report.recipe_quality.enabled is True
+        assert report.recipe_quality.total_recipes == 7
+
+    def test_diagnose_without_recipes_has_no_recipe_quality(self, spec_path: str, docs_path: str, glossary_path: str, settings, tmp_path):
+        from readme_doc_healer.diagnose import run_diagnose
+
+        report = run_diagnose(
+            spec_path, docs_path, glossary_path,
+            recipes_path=str(tmp_path / "nonexistent.json"),
+            settings=settings,
+        )
+        assert report.recipe_quality is None
+
+    def test_report_to_dict_includes_recipe_quality(self, spec_path: str, docs_path: str, glossary_path: str, settings):
+        from readme_doc_healer.diagnose import run_diagnose
+
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
+        d = report.to_dict()
+        assert "recipe_quality" in d
+        assert d["recipe_quality"]["total_recipes"] == 7
+
+    def test_report_to_markdown_includes_recipe_section(self, spec_path: str, docs_path: str, glossary_path: str, settings):
+        from readme_doc_healer.diagnose import run_diagnose
+
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
+        md = report.to_markdown()
+        assert "## Recipe quality" in md

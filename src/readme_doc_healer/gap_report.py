@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .recipes import RecipeIssue, RecipeQualitySummary
 
 
 @dataclass
@@ -70,6 +73,8 @@ class GapReport:
     generated_at: str = ""
     summary: GapSummary = field(default_factory=lambda: GapSummary(0, 0))
     config_quality: ConfigQualitySummary = field(default_factory=ConfigQualitySummary)
+    recipe_quality: Any = field(default=None)
+    recipe_issues: list[Any] = field(default_factory=list)
     gaps: list[Gap] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -95,7 +100,17 @@ class GapReport:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        # recipe fields use Any to avoid circular imports; serialize properly
+        if self.recipe_quality is not None:
+            d["recipe_quality"] = asdict(self.recipe_quality)
+        else:
+            d.pop("recipe_quality", None)
+        if self.recipe_issues:
+            d["recipe_issues"] = [asdict(i) for i in self.recipe_issues]
+        else:
+            d.pop("recipe_issues", None)
+        return d
 
     def to_markdown(self) -> str:
         """Render a human-readable markdown summary."""
@@ -140,6 +155,24 @@ class GapReport:
                     "- Sample keys missing defaults: "
                     + ", ".join(self.config_quality.sample_missing_default_keys)
                 )
+            lines.append("")
+
+        if self.recipe_quality is not None and self.recipe_quality.enabled:
+            rq = self.recipe_quality
+            lines.extend([
+                "## Recipe quality",
+                f"- Recipes: {rq.total_recipes} ({rq.valid_recipes} valid, {rq.invalid_recipes} with issues)",
+                f"- Categories: {rq.total_categories}",
+                f"- Unresolved setting IDs: {rq.unresolved_setting_ids}",
+                f"- Unresolved MA fields: {rq.unresolved_ma_fields}",
+                f"- Unmapped recipes: {rq.unmapped_recipes}",
+            ])
+            if rq.source_path:
+                lines.append(f"- Source: {rq.source_path}")
+            if rq.by_category:
+                lines.append("- By category: " + ", ".join(
+                    f"{cat}: {cnt}" for cat, cnt in sorted(rq.by_category.items())
+                ))
             lines.append("")
 
         # group gaps by endpoint

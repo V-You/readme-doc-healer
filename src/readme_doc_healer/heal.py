@@ -95,7 +95,7 @@ def run_heal(
         return {"error": f"Endpoint '{endpoint}' not found in spec. Available paths: {_list_paths(spec)}"}
 
     # run diagnose to get gap entries for this endpoint
-    report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+    report = run_diagnose(spec_path, docs_path, glossary_path, settings=settings)
     endpoint_gaps = _filter_gaps_for_endpoint(report, operation)
 
     # get matching legacy docs

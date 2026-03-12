@@ -23,6 +23,7 @@ _SAMPLE_LIMIT = 5
 @dataclass
 class ConfigLookupEntry:
     key: str
+    id: int = 0
     value_type: str = ""
     path: str = ""
     default: str = ""
@@ -32,6 +33,7 @@ class ConfigLookupEntry:
     def from_dict(cls, raw: dict[str, Any]) -> "ConfigLookupEntry":
         return cls(
             key=str(raw.get("key", "")).strip(),
+            id=int(raw.get("id", 0)),
             value_type=str(raw.get("type", "")).strip(),
             path=str(raw.get("path", "")).strip(),
             default=str(raw.get("default", "")).strip(),
@@ -39,7 +41,10 @@ class ConfigLookupEntry:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        """Serialize for outward payloads – excludes id (internal join key only)."""
+        d = asdict(self)
+        d.pop("id", None)
+        return d
 
 
 @dataclass
