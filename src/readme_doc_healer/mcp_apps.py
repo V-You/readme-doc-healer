@@ -569,7 +569,18 @@ def gap_matrix_template() -> str:
       try {{ data = JSON.parse(text.text); }} catch {{ return; }}
       const report = data.report || data;
       const summary = report.summary || {{}};
-      const gaps = report.gaps || [];
+
+      // support both full format (report.gaps flat list) and compact format
+      // (report.worst_endpoints[i].gaps) -- see diagnose(summary_only=true)
+      let gaps = report.gaps || [];
+      if (!gaps.length && report.worst_endpoints) {{
+        report.worst_endpoints.forEach(ep => {{
+          (ep.gaps || []).forEach(g => {{
+            const parts = ep.endpoint.split(" ");
+            gaps.push(Object.assign({{ method: parts[0] || "", endpoint: parts.slice(1).join(" ") || ep.endpoint }}, g));
+          }});
+        }});
+      }}
 
       const total = summary.total_gaps || 0;
       const crit = (summary.by_severity || {{}}).critical || 0;
