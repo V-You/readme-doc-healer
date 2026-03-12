@@ -2,6 +2,10 @@
 
 An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project -- all from the IDE. Uses real data from the ACI Merchant Onboarding API.
 
+| `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the GET <br>/channels/{channelId} endpoint | Run the full diagnose-heal-audit loop <br>on the demo data |
+|---|---|---|
+| <kbd><img src="img/" alt="" width="" /></kbd>|<kbd><img src="img/" alt="" width="" /></kbd> | <kbd><img src="img/" alt="" width="" /></kbd> |
+
 8C830FBA
 
 ## The 1,252 problem

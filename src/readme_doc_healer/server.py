@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from fastmcp import FastMCP
+from fastmcp.server.apps import AppConfig, ResourceCSP
 
 from .config import get_settings
 from .diagnose import run_diagnose
@@ -12,7 +13,12 @@ from .heal import run_heal, run_heal_push
 from .audit import run_audit
 from .glossary import load_glossary
 from .spec_parser import parse_spec
-from .mcp_apps import render_gap_matrix, render_audit_dashboard
+from .mcp_apps import (
+    render_gap_matrix,
+    render_audit_dashboard,
+    gap_matrix_template,
+    audit_dashboard_template,
+)
 
 mcp = FastMCP(
     name="readme-doc-healer",
@@ -34,6 +40,7 @@ mcp = FastMCP(
         "terminology drift between spec and docs. Returns JSON gap report + "
         "markdown summary. No API key needed -- local files only."
     ),
+    app=AppConfig(resourceUri="ui://doc-healer/gap-matrix.html"),
 )
 def diagnose(
     spec_path: str,
@@ -55,11 +62,9 @@ def diagnose(
         settings=settings,
     )
 
-    # return structured JSON, markdown summary, and the MCP App URI
     result = {
         "report": report.to_dict(),
         "markdown": report.to_markdown(),
-        "ui": f"ui://gap-matrix/{spec_path}/{docs_path}",
     }
     return json.dumps(result, indent=2, default=str)
 
@@ -135,6 +140,7 @@ def heal(
         "immediately. When offline=true or no API key, loads a canned fixture "
         "for demo purposes."
     ),
+    app=AppConfig(resourceUri="ui://doc-healer/audit-dashboard.html"),
 )
 def audit(
     readme_api_key: str | None = None,
@@ -152,7 +158,6 @@ def audit(
         offline=offline,
         settings=settings,
     )
-    result["ui"] = "ui://audit-dashboard"
     return json.dumps(result, indent=2, default=str)
 
 
@@ -198,9 +203,35 @@ def endpoint_index_resource(spec_path: str) -> str:
 
 # --- MCP Apps (ui:// scheme) ---
 
+_APPS_CSP = ResourceCSP(
+    resourceDomains=["https://unpkg.com"],
+    connectDomains=["https://unpkg.com"],
+)
+
+
+@mcp.resource(
+    "ui://doc-healer/gap-matrix.html",
+    app=AppConfig(csp=_APPS_CSP),
+)
+def gap_matrix_app_template() -> str:
+    """JS-driven gap matrix -- receives data from the diagnose tool via postMessage."""
+    return gap_matrix_template()
+
+
+@mcp.resource(
+    "ui://doc-healer/audit-dashboard.html",
+    app=AppConfig(csp=_APPS_CSP),
+)
+def audit_dashboard_app_template() -> str:
+    """JS-driven audit dashboard -- receives data from the audit tool via postMessage."""
+    return audit_dashboard_template()
+
+
+# --- Legacy server-rendered MCP Apps (standalone) ---
+
 @mcp.resource("ui://gap-matrix/{spec_path}/{docs_path}")
 def gap_matrix_app(spec_path: str, docs_path: str) -> str:
-    """Color-coded gap matrix showing severity distribution and expandable endpoint details."""
+    """Server-rendered gap matrix with data baked in (standalone use)."""
     settings = get_settings()
     report = run_diagnose(spec_path=spec_path, docs_path=docs_path, settings=settings)
     return render_gap_matrix(report.to_dict())
@@ -208,7 +239,7 @@ def gap_matrix_app(spec_path: str, docs_path: str) -> str:
 
 @mcp.resource("ui://audit-dashboard")
 def audit_dashboard_app() -> str:
-    """Triage dashboard with score gauges, worst pages, and failed searches."""
+    """Server-rendered audit dashboard with fixture data baked in (standalone use)."""
     settings = get_settings()
     result = run_audit(offline=True, settings=settings)
     return render_audit_dashboard(result["report"])
