@@ -5,10 +5,11 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 <table>
   <thead>
     <tr>
-      <th><kbd><b>/doc-healer</b></kbd> Analyze <br>the API docs for gaps</th>
-      <th><kbd><b>/doc-healer</b></kbd> Heal endpoint <br>GET /channels/{channelId}</th>
-      <th>Push <br>(after dry run)</th>
-      <th>Before / After</th>
+      <th><kbd><b>/doc-healer</b></kbd> <small>Analyze <br>the API docs for gaps</small></th>
+      <th><kbd><b>/doc-healer</b></kbd> <small>Heal endpoint <br>GET /channels/{channelId}</small></th>
+      <th><small>Push <br>(after dry run)</small></th>
+      <th><small>Before / After (pages)</small></th>
+      <th><small>Before / After (audit tool)</small></th>
     </tr>
   </thead>
   <tbody>
@@ -17,6 +18,7 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
       <td valign="top" align="center"><kbd><img src="img/heal_channelid.webp" alt="heal Channel" width="111"></kbd></td>
       <td valign="top" align="center"><kbd><img src="img/push.png" alt="Push to readme.com" width="111"></kbd></td>
       <td valign="top" align="center"><kbd><img src="img/before-after.webp" alt="A/B" width="111"></kbd></td>
+      <td valign="top" align="center"><kbd><img src="img/before-after_audit.webp" alt="A/B audit" width="111"></kbd></td>
     </tr>
   </tbody>
 </table>

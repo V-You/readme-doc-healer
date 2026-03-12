@@ -1,12 +1,7 @@
 ---
 name: doc-healer
-description: >
-  Chains diagnose, heal, and audit into a full documentation migration assist
-  session. Use when a user wants to find API doc gaps against an OpenAPI spec,
-  generate improved ReadMe-compatible content, push fixes to a ReadMe project,
-  or audit a live project for quality signals. Also use when the user mentions
-  legacy docs, Confluence exports, gap analysis, doc healing, or ReadMe audit.
-argument-hint: "[API specs] "
+description: Chains diagnose, heal, and audit into a full documentation migration assist session. Use when a user wants to find API doc gaps against an OpenAPI spec, generate improved ReadMe-compatible content, push fixes to a ReadMe project, or audit a live project for quality signals. Also use when the user mentions legacy docs, Confluence exports, gap analysis, doc healing, or ReadMe audit.
+argument-hint: "[API specs] or diagnose | heal | audit ..."
 ---
 
 # Doc healer
