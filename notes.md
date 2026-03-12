@@ -44,3 +44,8 @@ pytest tests/test_heal_audit.py   # heal context assembly + audit
 ### Future consideration
 
 - Standardize filenames inside `base_data/<PROJECT_DIR>/` so the server does not need to heuristically pick the OpenAPI spec file.
+- "Patch the spec" (backfill description fields in the YAML), requires a "spec healer"
+- **How to make the project more useful on a fundamental level.**  
+  - OpenAPI specs can be richer, BUT frontend breadcrumb paths need to be kept out of it as they are brittle. So: description, type, enum/allowed values, default, examples.  
+  - Separate config endpoints (RiRo values) from transactional endpoints (normal)
+  

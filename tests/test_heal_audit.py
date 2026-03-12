@@ -81,6 +81,30 @@ class TestHeal:
         assert "endpoint" in result
         assert "method" in result
 
+    def test_heal_config_endpoint_includes_config_profile(
+        self,
+        spec_path: str,
+        docs_path: str,
+        glossary_path: str,
+        settings: Settings,
+    ):
+        result = run_heal(
+            endpoint="POST /merchants/{merchantId}/setting",
+            spec_path=spec_path,
+            docs_path=docs_path,
+            glossary_path=glossary_path,
+            settings=settings,
+        )
+        assert result["config_profile"] is not None
+        config_profile = result["config_profile"]
+        assert config_profile["summary"]["enabled"] is True
+        assert config_profile["summary"]["lookup_entry_count"] == 1225
+        assert config_profile["summary"]["missing_default"] == 579
+        assert config_profile["summary"]["brittle_ui_path"] == 795
+        assert config_profile["summary"]["verbose_default_phrase"] == 683
+        assert len(config_profile["missing_default_examples"]) > 0
+        assert len(config_profile["brittle_ui_path_examples"]) > 0
+
 
 class TestAudit:
     """Audit tool -- offline fixture mode."""

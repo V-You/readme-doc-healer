@@ -217,3 +217,28 @@ class TestDiagnose:
         types = report.summary.by_type
         assert "missing_description" in types
         assert "missing_example" in types
+
+    def test_config_quality_summary_present(self, spec_path: str, docs_path: str, glossary_path: str, settings):
+        from readme_doc_healer.diagnose import run_diagnose
+
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        config_quality = report.config_quality
+        assert config_quality.enabled is True
+        assert config_quality.operations_assessed == 4
+        assert config_quality.lookup_entry_count == 1225
+        assert config_quality.missing_default == 579
+        assert config_quality.brittle_ui_path == 795
+        assert config_quality.verbose_default_phrase == 683
+
+    def test_config_gap_types_present_for_settings_endpoint(self, spec_path: str, docs_path: str, glossary_path: str, settings):
+        from readme_doc_healer.diagnose import run_diagnose
+
+        report = run_diagnose(spec_path, docs_path, glossary_path, settings)
+        gap_types = {
+            gap.gap_type
+            for gap in report.gaps
+            if gap.endpoint == "/merchants/{merchantId}/setting" and gap.method == "post"
+        }
+        assert "missing_default" in gap_types
+        assert "brittle_ui_path" in gap_types
+        assert "verbose_default_phrase" in gap_types

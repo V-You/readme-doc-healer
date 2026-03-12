@@ -22,8 +22,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .config import Settings, get_settings
+from .config_profile import ConfigProfile, is_config_operation, load_config_profile
 from .diagnose import run_diagnose
-from .doc_scanner import DocExample, DocParamConstraint, DocErrorCode, ScannedDoc, match_docs_to_operation, scan_docs_directory
+from .doc_scanner import DocExample, DocMatch, DocParamConstraint, DocErrorCode, ScannedDoc, match_docs_to_operation, scan_docs_directory
 from .gap_report import Gap, GapReport
 from .glossary import Glossary, load_glossary
 from .redaction import redact_text
@@ -56,6 +57,7 @@ class HealContext:
     legacy_error_codes: list[dict[str, Any]]
     gap_entries: list[dict[str, Any]]
     workflow_candidates: list[dict[str, Any]]
+    config_profile: dict[str, Any] | None
     summary: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
@@ -85,6 +87,7 @@ def run_heal(
     spec = parse_spec(spec_path)
     docs = scan_docs_directory(docs_path)
     glossary = load_glossary(glossary_path) if glossary_path else Glossary(entries=[])
+    config_profile = load_config_profile(docs_path)
 
     # find the target operation
     operation = _resolve_endpoint(endpoint, spec)
@@ -113,9 +116,10 @@ def run_heal(
 
     # detect workflow candidates
     workflows = _detect_workflows(operation, spec, docs, glossary, docs_path)
+    config_context = _build_config_profile_context(operation, config_profile)
 
     # build summary
-    summary = {
+    summary: dict[str, Any] = {
         "endpoint": f"{operation.method.upper()} {operation.path}",
         "operation_id": operation.operation_id,
         "total_gaps": len(endpoint_gaps),
@@ -125,7 +129,10 @@ def run_heal(
         "legacy_examples_found": len(legacy_examples),
         "legacy_param_constraints_found": len(legacy_param_constraints),
         "legacy_error_codes_found": len(legacy_error_codes),
+        "config_profile_enabled": bool(config_context),
     }
+    if config_context:
+        summary["config_lookup_entries"] = config_context["summary"]["lookup_entry_count"]
 
     context = HealContext(
         endpoint=operation.path,
@@ -138,6 +145,7 @@ def run_heal(
         legacy_error_codes=legacy_error_codes,
         gap_entries=endpoint_gaps,
         workflow_candidates=[asdict(w) for w in workflows],
+        config_profile=config_context or None,
         summary=summary,
     )
 
@@ -154,7 +162,15 @@ def run_heal(
         "legacy_error_codes": legacy_error_codes,
         "gap_entries": endpoint_gaps,
         "workflow_candidates": [asdict(w) for w in workflows],
+        "config_profile": config_context or None,
     }
+
+
+def _build_config_profile_context(operation: Operation, config_profile: ConfigProfile) -> dict[str, Any]:
+    """Attach bounded config-profile context for RiRo endpoints."""
+    if not is_config_operation(operation):
+        return {}
+    return config_profile.to_heal_context()
 
 
 def _resolve_endpoint(endpoint: str, spec: ParsedSpec) -> Operation | None:
@@ -189,7 +205,7 @@ def _resolve_endpoint(endpoint: str, spec: ParsedSpec) -> Operation | None:
 def _list_paths(spec: ParsedSpec) -> list[str]:
     """List available paths for error messages."""
     seen: set[str] = set()
-    paths = []
+    paths: list[str] = []
     for op in spec.operations:
         key = f"{op.method.upper()} {op.path}"
         if key not in seen:
@@ -200,7 +216,7 @@ def _list_paths(spec: ParsedSpec) -> list[str]:
 
 def _filter_gaps_for_endpoint(report: GapReport, operation: Operation) -> list[dict[str, Any]]:
     """Extract gap entries matching the target endpoint."""
-    result = []
+    result: list[dict[str, Any]] = []
     for gap in report.gaps:
         if gap.endpoint == operation.path and gap.method == operation.method:
             result.append(asdict(gap))
@@ -212,7 +228,7 @@ def _build_spec_fragment(operation: Operation, spec: ParsedSpec) -> dict[str, An
     path_data = spec.raw.get("paths", {}).get(operation.path, {})
     method_data = path_data.get(operation.method, {})
 
-    fragment = {
+    fragment: dict[str, Any] = {
         "path": operation.path,
         "method": operation.method,
         "operation_id": operation.operation_id,
@@ -227,7 +243,7 @@ def _build_spec_fragment(operation: Operation, spec: ParsedSpec) -> dict[str, An
 
 
 def _build_legacy_snippets(
-    doc_matches: list,
+    doc_matches: list[DocMatch],
     docs: list[ScannedDoc],
     operation: Operation,
     settings: Settings,
@@ -259,7 +275,7 @@ def _build_legacy_snippets(
 
 
 def _build_legacy_examples(
-    doc_matches: list,
+    doc_matches: list[DocMatch],
     docs: list[ScannedDoc],
 ) -> list[dict[str, Any]]:
     """Extract structured examples from matched legacy docs."""
@@ -285,7 +301,7 @@ def _build_legacy_examples(
 
 
 def _build_legacy_param_constraints(
-    doc_matches: list,
+    doc_matches: list[DocMatch],
     docs: list[ScannedDoc],
 ) -> list[dict[str, Any]]:
     """Extract structured parameter constraints from matched legacy docs."""
@@ -315,7 +331,7 @@ def _build_legacy_param_constraints(
 
 
 def _build_legacy_error_codes(
-    doc_matches: list,
+    doc_matches: list[DocMatch],
     docs: list[ScannedDoc],
 ) -> list[dict[str, Any]]:
     """Extract structured error codes from matched legacy docs."""

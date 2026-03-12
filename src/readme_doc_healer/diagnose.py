@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from .config import Settings
+from .config_profile import ConfigProfile, build_config_gap_specs, is_config_operation, load_config_profile
 from .doc_scanner import DocMatch, ScannedDoc, match_docs_to_operation, scan_docs_directory
 from .gap_report import Gap, GapReport, MatchedDoc
 from .glossary import Glossary, load_glossary
 from .redaction import redact_dict
-from .spec_parser import Operation, ParsedSpec, parse_spec
+from .spec_parser import Operation, parse_spec
 from .vagueness import (
     check_endpoint_description,
     check_parameter_description,
@@ -34,9 +33,15 @@ def run_diagnose(
     spec = parse_spec(spec_path)
     docs = scan_docs_directory(docs_path)
     glossary = load_glossary(glossary_path) if glossary_path else Glossary(entries=[])
+    config_profile = load_config_profile(docs_path)
 
     # build the gap report
-    report = GapReport(spec_path=spec_path, docs_path=docs_path)
+    report = GapReport(
+        spec_path=spec_path,
+        docs_path=docs_path,
+        config_quality=config_profile.summary,
+    )
+    config_operations_assessed = 0
 
     for operation in spec.operations:
         # match docs to this endpoint
@@ -50,6 +55,10 @@ def run_diagnose(
         _check_example_gaps(operation, doc_matches, best_match, report, settings, docs)
         _check_error_code_gaps(operation, doc_matches, best_match, report, settings)
 
+        if is_config_operation(operation):
+            config_operations_assessed += 1
+            _check_config_profile_gaps(operation, report, config_profile)
+
         # check for undocumented endpoint
         if not doc_matches:
             report.gaps.append(_make_gap(
@@ -59,6 +68,8 @@ def run_diagnose(
                 message=f"No legacy documentation found for {operation.method.upper()} {operation.path}",
                 heuristic_reason="no matching legacy doc found",
             ))
+
+    report.config_quality.operations_assessed = config_operations_assessed
 
     # compute summary
     report.compute_summary()
@@ -240,6 +251,33 @@ def _check_error_code_gaps(
         report.gaps.append(gap)
 
 
+def _check_config_profile_gaps(
+    op: Operation,
+    report: GapReport,
+    config_profile: ConfigProfile,
+) -> None:
+    """Attach aggregated config-profile gaps to configuration endpoints."""
+    if not config_profile.summary.enabled:
+        return
+
+    for gap_spec in build_config_gap_specs(config_profile):
+        report.gaps.append(Gap(
+            endpoint=op.path,
+            method=op.method,
+            gap_type=gap_spec["gap_type"],
+            severity=gap_spec["severity"],
+            message=gap_spec["message"],
+            operation_id=op.operation_id,
+            spec_value=gap_spec.get("spec_value"),
+            doc_snippet=gap_spec.get("doc_snippet", ""),
+            doc_source=gap_spec.get("doc_source", ""),
+            heuristic=True,
+            heuristic_reason=gap_spec.get("heuristic_reason"),
+            needs_llm_review=False,
+            status="needs_review",
+        ))
+
+
 def _base_severity(gap_type: str, is_endpoint: bool = True, is_required: bool = True) -> str:
     """Determine base severity from gap type per PRD rules."""
     if gap_type == "missing_description":
@@ -248,9 +286,11 @@ def _base_severity(gap_type: str, is_endpoint: bool = True, is_required: bool = 
         return "critical"
     if gap_type == "doc_spec_mismatch":
         return "critical"
+    if gap_type == "missing_default":
+        return "warning"
     if gap_type in ("vague_description", "missing_example", "no_business_context"):
         return "warning"
-    if gap_type in ("terminology_drift", "missing_error_code"):
+    if gap_type in ("terminology_drift", "missing_error_code", "brittle_ui_path", "verbose_default_phrase"):
         return "info"
     return "info"
 

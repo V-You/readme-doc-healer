@@ -47,11 +47,29 @@ class GapSummary:
 
 
 @dataclass
+class ConfigQualitySummary:
+    enabled: bool = False
+    lookup_path: str = ""
+    config_doc_source: str = ""
+    operations_assessed: int = 0
+    lookup_entry_count: int = 0
+    with_defaults: int = 0
+    missing_default: int = 0
+    brittle_ui_path: int = 0
+    verbose_default_phrase: int = 0
+    by_type: dict[str, int] = field(default_factory=dict)
+    sample_missing_default_keys: list[str] = field(default_factory=list)
+    sample_brittle_ui_paths: list[str] = field(default_factory=list)
+    sample_verbose_default_phrases: list[str] = field(default_factory=list)
+
+
+@dataclass
 class GapReport:
     spec_path: str
     docs_path: str
     generated_at: str = ""
     summary: GapSummary = field(default_factory=lambda: GapSummary(0, 0))
+    config_quality: ConfigQualitySummary = field(default_factory=ConfigQualitySummary)
     gaps: list[Gap] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -101,6 +119,27 @@ class GapReport:
             lines.append("### By type")
             for gap_type, count in sorted(self.summary.by_type.items()):
                 lines.append(f"- {gap_type}: {count}")
+            lines.append("")
+
+        if self.config_quality.enabled:
+            lines.extend([
+                "## Config quality",
+                f"- Config operations assessed: {self.config_quality.operations_assessed}",
+                f"- Lookup entries: {self.config_quality.lookup_entry_count}",
+                f"- Keys with defaults: {self.config_quality.with_defaults}",
+                f"- Keys missing defaults: {self.config_quality.missing_default}",
+                f"- Keys with UI breadcrumb paths: {self.config_quality.brittle_ui_path}",
+                f"- Verbose 'defaults to' phrases: {self.config_quality.verbose_default_phrase}",
+            ])
+            if self.config_quality.lookup_path:
+                lines.append(f"- Lookup source: {self.config_quality.lookup_path}")
+            if self.config_quality.config_doc_source:
+                lines.append(f"- Config doc source: {self.config_quality.config_doc_source}")
+            if self.config_quality.sample_missing_default_keys:
+                lines.append(
+                    "- Sample keys missing defaults: "
+                    + ", ".join(self.config_quality.sample_missing_default_keys)
+                )
             lines.append("")
 
         # group gaps by endpoint

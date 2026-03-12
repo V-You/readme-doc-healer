@@ -30,6 +30,37 @@
         }
       }
     },
+    "config_quality": {
+      "type": "object",
+      "description": "Separate config-quality summary derived from the RiRo lookup profile when available.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "lookup_path": { "type": "string" },
+        "config_doc_source": { "type": "string" },
+        "operations_assessed": { "type": "integer" },
+        "lookup_entry_count": { "type": "integer" },
+        "with_defaults": { "type": "integer" },
+        "missing_default": { "type": "integer" },
+        "brittle_ui_path": { "type": "integer" },
+        "verbose_default_phrase": { "type": "integer" },
+        "by_type": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "sample_missing_default_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sample_brittle_ui_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sample_verbose_default_phrases": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "gaps": {
       "type": "array",
       "items": {
@@ -59,7 +90,10 @@
               "vague_description",
               "missing_example",
               "missing_error_code",
+              "missing_default",
               "no_business_context",
+              "brittle_ui_path",
+              "verbose_default_phrase",
               "terminology_drift",
               "undocumented_endpoint",
               "doc_spec_mismatch"
