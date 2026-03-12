@@ -55,10 +55,11 @@ def diagnose(
         settings=settings,
     )
 
-    # return both structured JSON and markdown summary
+    # return structured JSON, markdown summary, and the MCP App URI
     result = {
         "report": report.to_dict(),
         "markdown": report.to_markdown(),
+        "ui": f"ui://gap-matrix/{spec_path}/{docs_path}",
     }
     return json.dumps(result, indent=2, default=str)
 
@@ -151,6 +152,7 @@ def audit(
         offline=offline,
         settings=settings,
     )
+    result["ui"] = "ui://audit-dashboard"
     return json.dumps(result, indent=2, default=str)
 
 
