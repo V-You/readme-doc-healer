@@ -131,6 +131,7 @@ def heal(
     content_markdown: str | None = None,
     dry_run: bool = True,
     branch: str | None = None,
+    slug: str | None = None,
 ) -> str:
     """Assemble context for healing an endpoint's documentation.
 
@@ -144,6 +145,7 @@ def heal(
         content_markdown: Required when push=true -- the approved content to publish.
         dry_run: When pushing, preview without writing (default true).
         branch: ReadMe branch to publish to (default from settings).
+        slug: Optional slug override for the ReadMe page URL.
     """
     settings = get_settings()
     resolved_spec_path, resolved_docs_path, resolved_glossary_path, error = _resolve_local_inputs(
@@ -170,6 +172,7 @@ def heal(
             settings=settings,
             branch=branch,
             dry_run=dry_run,
+            slug=slug,
         )
         return json.dumps(result, indent=2, default=str)
 

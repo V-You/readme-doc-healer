@@ -553,11 +553,17 @@ def run_heal_push(
     settings: Settings | None = None,
     branch: str | None = None,
     dry_run: bool = True,
+    slug: str | None = None,
 ) -> dict[str, Any]:
     """Publish approved content to ReadMe via the Refactored v2 API.
 
     The flow: resolve endpoint -> derive slug -> check if guide exists ->
     create or update. Dry-run (default) previews without writing.
+
+    Args:
+        slug: Optional slug override. When set, uses this instead of auto-deriving
+              from the operationId. Useful when a previously deleted page still
+              occupies the auto-derived slug on ReadMe.
     """
     if settings is None:
         settings = get_settings()
@@ -575,8 +581,9 @@ def run_heal_push(
     if operation is None:
         return {"error": f"Endpoint '{endpoint}' not found in spec."}
 
-    # derive slug from operationId or path
-    slug = _derive_slug(operation)
+    # derive slug from operationId or path (unless overridden)
+    if not slug:
+        slug = _derive_slug(operation)
     category_title = _derive_category(operation, docs_path)
 
     headers = {
