@@ -5,7 +5,7 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 <table>
   <thead>
     <tr>
-      <th><kbd>/doc-healer</kbd> Analyze the Web API docs for gaps</th>
+      <th><kbd><b>/doc-healer</b></kbd> Analyze the Web API docs for gaps</th>
       <th>Heal the endpoint GET /channels/{channelId}</th>
       <th>Push (after dry run)</th>
       <th>Before / After</th>
@@ -13,10 +13,10 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
   </thead>
   <tbody>
     <tr>
-      <td valign="top"><kbd><img src="img/Screenshot_2026-03-11_220320.webp" alt="Gap matrix" width="111"></kbd></td>
-      <td valign="top"><kbd><img src="img/heal_channelid.webp" alt="heal Channel" width="111"></kbd></td>
-      <td valign="top"><kbd><img src="img/push.png" alt="Push to readme.com" width="111"></kbd></td>
-      <td valign="top"><kbd><img src="img/before-after.webp" alt="A/B" width="111"></kbd></td>
+      <td valign="top" align="center"><kbd><img src="img/Screenshot_2026-03-11_220320.webp" alt="Gap matrix" width="111"></kbd></td>
+      <td valign="top" align="center"><kbd><img src="img/heal_channelid.webp" alt="heal Channel" width="111"></kbd></td>
+      <td valign="top" align="center"><kbd><img src="img/push.png" alt="Push to readme.com" width="111"></kbd></td>
+      <td valign="top" align="center"><kbd><img src="img/before-after.webp" alt="A/B" width="111"></kbd></td>
     </tr>
   </tbody>
 </table>
