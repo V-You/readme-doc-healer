@@ -4,15 +4,15 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 
 | `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the endpoint <br>GET /channels/{channelId}  | Run the full diagnose-heal-audit loop <br>on the demo data |
 |---|---|---|
-| <kbd><img src="img/" alt="" width="" /></kbd>|<kbd><img src="img/" alt="" width="" /></kbd> | <kbd><img src="img/" alt="" width="" /></kbd> |
+| <kbd><img src="img/Screenshot_2026-03-11_220320.png" alt="Gap matrix" width="99" /></kbd>|<kbd><img src="img/" alt="" width="" /></kbd> | <kbd><img src="img/" alt="" width="" /></kbd> |
 
 
 
-## The 1,252 problem
+## Problem
 
 The Web API exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all.
 
-This tool was built to make that API usable. `diagnose` finds **474 documentation gaps** across 72 operations. `heal` assembles the context so an LLM can write the fix. `audit` checks whether users noticed the improvement.
+This MCP server was built to make that API usable. `diagnose` finds **474 documentation gaps** across 72 API call operations. `heal` assembles the context so an LLM can write the fix. `audit` checks whether users noticed the improvement.
 
 ## Tools
 
@@ -79,7 +79,9 @@ readme-doc-healer
 
 ### MCP client configuration
 
-Add to your MCP client config (VS Code settings, Claude Desktop, etc.):
+#### VS Code
+
+Add to mcp.json:
 
 ```json
 {
@@ -120,14 +122,14 @@ Triage report: 5 worst pages, 5 zero-result searches, 3 negative feedback pages
 
 ## Demo data
 
-The server now resolves local demo data from `.env`:
+The server resolves local demo data from `.env`:
 
-- `PROJECT_NAME` is the display label for the active local project
-- `PROJECT_DIR` is the folder name under `base_data/`
+- `PROJECT_NAME`: display label for the local project
+- `PROJECT_DIR`: folder name under `base_data/`
 - The server prefers `base_data/<PROJECT_DIR>/...`
-- If files are not present there yet, it falls back to the legacy flat `base_data/` layout
+- If empty, fallback to `base_data/`
 
-Preferred layout:
+Example layout:
 
 ```text
 base_data/
@@ -158,18 +160,18 @@ VS Code / IDE
 +---v--------------------------------------+
 | readme-doc-healer (FastMCP)              |
 |                                          |
-|  +----------+ +------+ +---------+      |
-|  | diagnose | | heal | |  audit  |      |
-|  +----+-----+ +--+---+ +----+----+      |
-|       |          |           |           |
+|  +----------+ +------+ +---------+       |
+|  | diagnose | | heal | |  audit  |       |
+|  +----+-----+ +--+---+ +----+----+       |
+|       |          |          |            |
 |  +----v----------v--+  +----v----------+ |
 |  | Spec + Doc Parser|  | ReadMe API v2 | |
 |  | (local files)    |  | + Metrics API | |
-|  +------------------+  +--------------+  |
+|  +------------------+  +---------------+ |
 +------------------------------------------+
 ```
 
-Key decision: `heal` does NOT call an LLM. It assembles context; the host LLM generates the documentation.
+Key decision: `heal` does NOT call an LLM. It assembles context, and the host LLM generates the documentation.
 
 ## Tech stack
 
@@ -187,7 +189,7 @@ Key decision: `heal` does NOT call an LLM. It assembles context; the host LLM ge
 | ReadMe API v2 | `api.readme.com/v2` | Bearer | Guides, categories, recipes, search, branches |
 | Metrics API | `metrics.readme.io/v2` | Basic (key:) | Page quality, search terms – Enterprise only |
 
-`diagnose` needs no API key. `heal` needs a key only for push mode. `audit` live mode needs an Enterprise-tier key; falls back to fixture otherwise.
+`diagnose` needs no API key. `heal` needs a key only for push mode. `audit` live mode needs an Enterprise-tier key; or fallback to fixture.
 
 ## Tests
 
