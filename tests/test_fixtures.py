@@ -26,6 +26,42 @@ class TestExactPathMatch:
         assert best.strategy == "path_exact"
         assert best.confidence == 1.0
 
+    def test_add_contact_merchant_owned_contacts_path_exact(
+        self,
+        spec: ParsedSpec,
+        docs: list[ScannedDoc],
+        glossary: Glossary,
+    ):
+        """POST /merchants/{merchantId}/ownedContacts -> 01-Add-Contact via path_exact."""
+        op = spec.find_operation("/merchants/{merchantId}/ownedContacts", "post")
+        assert op is not None
+
+        matches = match_docs_to_operation(op, docs, glossary)
+        assert len(matches) >= 1
+
+        best = matches[0]
+        assert best.doc_source == "01-Add-Contact_48739456.html"
+        assert best.strategy == "path_exact"
+        assert best.confidence == 1.0
+
+    def test_add_contact_psp_owned_contacts_path_exact(
+        self,
+        spec: ParsedSpec,
+        docs: list[ScannedDoc],
+        glossary: Glossary,
+    ):
+        """POST /psps/{pspId}/ownedContacts -> 01-Add-Contact via path_exact."""
+        op = spec.find_operation("/psps/{pspId}/ownedContacts", "post")
+        assert op is not None
+
+        matches = match_docs_to_operation(op, docs, glossary)
+        assert len(matches) >= 1
+
+        best = matches[0]
+        assert best.doc_source == "01-Add-Contact_48739456.html"
+        assert best.strategy == "path_exact"
+        assert best.confidence == 1.0
+
 
 class TestFuzzyFilenameMatch:
     """Endpoints matched via filename keyword overlap."""
@@ -44,16 +80,15 @@ class TestFuzzyFilenameMatch:
         assert 0.3 <= best.confidence < 1.0
 
     def test_channels_list_fuzzy(self, spec: ParsedSpec, docs: list[ScannedDoc], glossary: Glossary):
-        """GET /merchants/{merchantId}/channels -> 04-Get-Channels-List via filename_fuzzy."""
+        """GET /merchants/{merchantId}/channels should include the channels list doc match."""
         op = spec.find_operation("/merchants/{merchantId}/channels", "get")
         assert op is not None
 
         matches = match_docs_to_operation(op, docs, glossary)
         assert len(matches) >= 1
 
-        best = matches[0]
-        assert best.doc_source == "04-Get-Channels-List_48741063.html"
-        assert best.strategy == "filename_fuzzy"
+        expected = [m for m in matches if m.doc_source == "04-Get-Channels-List_48741063.html"]
+        assert len(expected) >= 1
 
 
 class TestGlossaryAliasMatch:

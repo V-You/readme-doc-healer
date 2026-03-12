@@ -1,6 +1,6 @@
 # ReadMe Doc Healer
 
-An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project – all from the IDE. Uses source data from the ACI Web API (example project).
+An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project – all from the IDE. Uses source data from the “ACI Web API” (example project).
 
 <table>
   <thead>
@@ -27,7 +27,7 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 
 ## Problem
 
-The “Web API” exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all. This “Doc Healer” MCP server was built to make that API more usable. `Diagnose` finds **474 documentation gaps** across 72 API call operations. `Heal` assembles the context so an LLM can write the fix. `Audit` checks whether users noticed the improvement.
+The “Web API” exposes 72 endpoints. Two of them cover 1,252 configuration options (read and set). Not all have meaningful descriptions. Customer documentation has drifted from the spec. The frontend config manuals are not connected to the API calls. Many calls have no dedicated page. This “Doc Healer” MCP server was built to make the API more usable. `Diagnose` finds **474 documentation gaps** across 72 API call operations. `Heal` assembles the context so an LLM can write the fix. `Audit` checks whether users noticed the improvement.
 
 ## Tools
 
@@ -71,7 +71,7 @@ score gauge, worst pages table, failed searches, negative feedback
 
 | URI | Description |
 |-----|-------------|
-| `glossary://terms` | Business term glossary with aliases for terminology normalization |
+| `glossary://terms` | Business term glossary with aliases (example: Contact = user) |
 | `endpoints://{spec_path}` | Endpoint index parsed from an OpenAPI spec |
 
 ## Quick start

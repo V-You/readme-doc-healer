@@ -134,9 +134,10 @@ def _parse_html_doc(path: Path) -> ScannedDoc | None:
     main_content = soup.find(id="main-content") or soup.find("body")
     body_text = main_content.get_text(separator=" ", strip=True) if main_content else ""
 
-    # for path extraction, also get text without separator to preserve paths
-    # that span html tags (e.g. /channels/<code>{channelId}</code>)
-    raw_text = main_content.get_text(separator="", strip=True) if main_content else ""
+    # for path extraction, keep block boundaries to avoid glueing labels
+    # into endpoints (e.g. ownedContacts + Option in Confluence tables).
+    # we normalize inline spacing in _find_endpoint_paths.
+    raw_text = main_content.get_text(separator="\n", strip=True) if main_content else ""
 
     # find endpoint paths from both text versions
     endpoint_paths = _find_endpoint_paths(raw_text)
@@ -303,10 +304,21 @@ def _extract_tables_from_soup(
 
 def _find_endpoint_paths(text: str) -> list[str]:
     """Find API endpoint path patterns in text (e.g. /merchants/{merchantId}/channels)."""
+    if not text:
+        return []
+
+    # normalize spacing so inline tags like /psps/ <code>{pspId}</code> /ownedContacts
+    # become a single path token before regex matching.
+    normalized = re.sub(r"\s+", " ", text)
+    normalized = re.sub(r"/\s+", "/", normalized)
+    normalized = re.sub(r"\s+/", "/", normalized)
+    normalized = re.sub(r"\{\s+", "{", normalized)
+    normalized = re.sub(r"\s+\}", "}", normalized)
+
     # match path segments and template params, stopping at non-path characters.
     # each segment is either a literal word or a {param} template.
     pattern = r"(?<!\w)(\/(?:[a-zA-Z][a-zA-Z0-9._-]*|\{[a-zA-Z][a-zA-Z0-9_]*\})(?:\/(?:[a-zA-Z][a-zA-Z0-9._-]*|\{[a-zA-Z][a-zA-Z0-9_]*\}))*)"
-    raw_matches = re.findall(pattern, text)
+    raw_matches = re.findall(pattern, normalized)
 
     paths = []
     for m in raw_matches:
