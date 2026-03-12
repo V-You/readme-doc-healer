@@ -75,13 +75,13 @@ def run_heal(
     if settings is None:
         settings = get_settings()
 
-    glossary_path = glossary_path or settings.glossary_path
+    glossary_path = glossary_path or settings.resolved_glossary_path
     mode = output_mode or settings.heal_mode
 
     # parse inputs
     spec = parse_spec(spec_path)
     docs = scan_docs_directory(docs_path)
-    glossary = load_glossary(glossary_path)
+    glossary = load_glossary(glossary_path) if glossary_path else Glossary(entries=[])
 
     # find the target operation
     operation = _resolve_endpoint(endpoint, spec)

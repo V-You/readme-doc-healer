@@ -1,7 +1,8 @@
 """Audit tool -- surfaces support-relevant quality signals from a ReadMe project.
 
 When online (default): hits ReadMe Refactored v2 metrics endpoints.
-When offline or API unreachable: loads canned fixture from base_data/audit-fixture.json.
+When offline or API unreachable: loads a canned fixture from the active project
+data folder, falling back to the legacy flat base_data/audit-fixture.json.
 """
 
 from __future__ import annotations
@@ -15,10 +16,9 @@ import base64
 
 import httpx
 
-from .config import Settings, get_settings, _PROJECT_ROOT
+from .config import Settings, get_settings
 
 
-_FIXTURE_PATH = _PROJECT_ROOT / "base_data" / "audit-fixture.json"
 _README_API_BASE = "https://api.readme.com/v2"
 _METRICS_API_BASE = "https://metrics.readme.io/v2"
 
@@ -104,9 +104,9 @@ def run_audit(
     api_key = readme_api_key or settings.readme_api_key
 
     if offline or not api_key:
-        report = _load_fixture()
+        report = _load_fixture(settings)
     else:
-        report = _fetch_live_metrics(api_key)
+        report = _fetch_live_metrics(api_key, settings)
 
     result = {
         "report": report.to_dict(),
@@ -115,9 +115,13 @@ def run_audit(
     return result
 
 
-def _load_fixture() -> AuditReport:
+def _load_fixture(settings: Settings | None = None) -> AuditReport:
     """Load canned fixture data for offline demo."""
-    if not _FIXTURE_PATH.exists():
+    if settings is None:
+        settings = get_settings()
+
+    fixture_path = settings.resolved_audit_fixture_path
+    if not fixture_path or not Path(fixture_path).exists():
         return AuditReport(
             project="demo (no fixture found)",
             generated_at="",
@@ -127,7 +131,7 @@ def _load_fixture() -> AuditReport:
             offline=True,
         )
 
-    with open(_FIXTURE_PATH, encoding="utf-8") as f:
+    with open(fixture_path, encoding="utf-8") as f:
         data = json.load(f)
 
     return AuditReport(
@@ -140,7 +144,7 @@ def _load_fixture() -> AuditReport:
     )
 
 
-def _fetch_live_metrics(api_key: str) -> AuditReport:
+def _fetch_live_metrics(api_key: str, settings: Settings) -> AuditReport:
     """Fetch live metrics from ReadMe metrics API.
 
     Metrics live at metrics.readme.io/v2 with Basic auth (key:).
@@ -165,7 +169,7 @@ def _fetch_live_metrics(api_key: str) -> AuditReport:
             resp = client.get(f"{_METRICS_API_BASE}/thumb/average", headers=headers)
             if resp.status_code == 401:
                 # enterprise-only -- fall back to fixture
-                return _load_fixture()
+                return _load_fixture(settings)
             if resp.status_code == 200:
                 data = resp.json()
                 page_quality["average_score"] = data.get("average", 0)
@@ -233,7 +237,7 @@ def _fetch_live_metrics(api_key: str) -> AuditReport:
                 )[:10]
 
     except httpx.HTTPError:
-        return _load_fixture()
+        return _load_fixture(settings)
 
     return AuditReport(
         project="live",

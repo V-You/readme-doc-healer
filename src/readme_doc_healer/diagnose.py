@@ -28,12 +28,12 @@ def run_diagnose(
         from .config import get_settings
         settings = get_settings()
 
-    glossary_path = glossary_path or settings.glossary_path
+    glossary_path = glossary_path or settings.resolved_glossary_path
 
     # parse
     spec = parse_spec(spec_path)
     docs = scan_docs_directory(docs_path)
-    glossary = load_glossary(glossary_path)
+    glossary = load_glossary(glossary_path) if glossary_path else Glossary(entries=[])
 
     # build the gap report
     report = GapReport(spec_path=spec_path, docs_path=docs_path)

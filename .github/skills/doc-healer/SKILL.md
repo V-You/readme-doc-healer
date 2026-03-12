@@ -38,11 +38,11 @@ The server exposes three tools and four resources:
 Resources: `glossary://terms`, `endpoints://{spec_path}`,
 `ui://gap-matrix/{spec_path}/{docs_path}`, `ui://audit-dashboard`.
 
-Demo data lives in `base_data/`:
-- Spec: `base_data/ACI Merchant Onboarding API.best.openapi.yaml`
-- Legacy docs: `base_data/Legacy-Documentation/`
-- Glossary: `base_data/glossary.json`
-- Audit fixture: `base_data/audit-fixture.json`
+Local demo data resolves from `.env`:
+- `PROJECT_NAME`: display name for the active project
+- `PROJECT_DIR`: folder name under `base_data/`
+- Preferred layout: `base_data/<PROJECT_DIR>/...`
+- Backward compatibility: if project files are missing there, the server falls back to the legacy flat `base_data/` layout
 
 ## Workflow
 
@@ -54,17 +54,14 @@ loop gives the best results.
 Find every gap between the spec and the legacy docs.
 
 ```
-diagnose(
-    spec_path="base_data/ACI Merchant Onboarding API.best.openapi.yaml",
-    docs_path="base_data/Legacy-Documentation/",
-    glossary_path="base_data/glossary.json"
-)
+diagnose()
 ```
 
 Review the gap report. Focus on critical-severity items first. The report
 includes a markdown summary and structured JSON with per-endpoint details.
 
-If the user does not provide paths, use the defaults from `base_data/`.
+If the user does not provide paths, the server resolves them from `.env`
+using `PROJECT_DIR` and `base_data/<PROJECT_DIR>/`.
 
 ### Step 2 -- heal (context assembly)
 
@@ -72,10 +69,7 @@ Pick a specific endpoint from the gap report and assemble context.
 
 ```
 heal(
-    endpoint="GET /channels/{channelId}",
-    spec_path="base_data/ACI Merchant Onboarding API.best.openapi.yaml",
-    docs_path="base_data/Legacy-Documentation/",
-    glossary_path="base_data/glossary.json"
+    endpoint="GET /channels/{channelId}"
 )
 ```
 
@@ -95,8 +89,6 @@ Once the user approves content, push it to ReadMe.
 ```
 heal(
     endpoint="GET /channels/{channelId}",
-    spec_path="base_data/ACI Merchant Onboarding API.best.openapi.yaml",
-    docs_path="base_data/Legacy-Documentation/",
     push=true,
     content_markdown="<the approved markdown>",
     dry_run=true
@@ -125,9 +117,10 @@ satisfied or coverage targets are met.
 
 ## Defaults to use when details are missing
 
-- If the user does not specify a spec path, use `base_data/ACI Merchant Onboarding API.best.openapi.yaml`
-- If the user does not specify a docs path, use `base_data/Legacy-Documentation/`
-- If the user does not specify a glossary path, use `base_data/glossary.json`
+- If the user does not specify a spec path, resolve it from `base_data/<PROJECT_DIR>/` first, then fall back to the legacy flat `base_data/` layout
+- If the user does not specify a docs path, resolve it from `base_data/<PROJECT_DIR>/Legacy-Documentation/` first, then fall back to the legacy flat `base_data/` layout
+- If the user does not specify a glossary path, resolve `glossary.json` from `base_data/<PROJECT_DIR>/` first, then fall back to the legacy flat `base_data/` layout
+- If multiple spec files exist in the project folder, verify the chosen file before relying on it
 - If the user does not specify an endpoint, pick the one with the most critical gaps from the last diagnose run
 - If the user does not specify a branch, the server defaults to `stable`
 - If push mode is requested without content, run heal in local mode first and generate content before pushing

@@ -7,7 +7,7 @@ import json
 from fastmcp import FastMCP
 from fastmcp.server.apps import AppConfig, ResourceCSP
 
-from .config import get_settings
+from .config import Settings, get_settings
 from .diagnose import run_diagnose
 from .heal import run_heal, run_heal_push
 from .audit import run_audit
@@ -30,6 +30,36 @@ mcp = FastMCP(
 )
 
 
+def _resolve_local_inputs(
+    settings: Settings,
+    spec_path: str | None,
+    docs_path: str | None,
+    glossary_path: str | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Resolve local file inputs from explicit args or project-scoped defaults."""
+    resolved_spec_path = spec_path or settings.resolved_spec_path
+    resolved_docs_path = docs_path or settings.resolved_docs_path
+    resolved_glossary_path = glossary_path or settings.resolved_glossary_path
+
+    missing: list[str] = []
+    if not resolved_spec_path:
+        missing.append("spec_path")
+    if not resolved_docs_path:
+        missing.append("docs_path")
+
+    if not missing:
+        return resolved_spec_path, resolved_docs_path, resolved_glossary_path, None
+
+    project_dir = str(settings.project_data_dir) if settings.project_data_dir else None
+    error = {
+        "error": f"Could not resolve {', '.join(missing)} from tool args or .env defaults.",
+        "project_dir": project_dir,
+        "search_roots": [str(root) for root in settings.data_search_roots],
+        "hint": "Set spec_path/docs_path explicitly, or add project files under base_data/<PROJECT_DIR>/.",
+    }
+    return None, None, None, json.dumps(error, indent=2)
+
+
 @mcp.tool(
     name="diagnose",
     description=(
@@ -43,22 +73,34 @@ mcp = FastMCP(
     app=AppConfig(resourceUri="ui://doc-healer/gap-matrix.html"),
 )
 def diagnose(
-    spec_path: str,
-    docs_path: str,
+    spec_path: str | None = None,
+    docs_path: str | None = None,
     glossary_path: str | None = None,
 ) -> str:
     """Run gap analysis on an OpenAPI spec against legacy documentation.
 
     Args:
-        spec_path: Path to OpenAPI JSON/YAML spec file.
-        docs_path: Path to directory of legacy doc files (HTML, markdown).
+        spec_path: Optional path to OpenAPI JSON/YAML spec file.
+        docs_path: Optional path to directory of legacy doc files (HTML, markdown).
         glossary_path: Optional path to glossary JSON for terminology normalization.
     """
     settings = get_settings()
+    resolved_spec_path, resolved_docs_path, resolved_glossary_path, error = _resolve_local_inputs(
+        settings,
+        spec_path,
+        docs_path,
+        glossary_path,
+    )
+    if error:
+        return error
+
+    assert resolved_spec_path is not None
+    assert resolved_docs_path is not None
+
     report = run_diagnose(
-        spec_path=spec_path,
-        docs_path=docs_path,
-        glossary_path=glossary_path,
+        spec_path=resolved_spec_path,
+        docs_path=resolved_docs_path,
+        glossary_path=resolved_glossary_path,
         settings=settings,
     )
 
@@ -81,8 +123,8 @@ def diagnose(
 )
 def heal(
     endpoint: str,
-    spec_path: str,
-    docs_path: str,
+    spec_path: str | None = None,
+    docs_path: str | None = None,
     glossary_path: str | None = None,
     output_mode: str | None = None,
     push: bool = False,
@@ -94,8 +136,8 @@ def heal(
 
     Args:
         endpoint: Endpoint to heal -- "GET /path", "/path", or operationId.
-        spec_path: Path to OpenAPI JSON/YAML spec file.
-        docs_path: Path to directory of legacy doc files.
+        spec_path: Optional path to OpenAPI JSON/YAML spec file.
+        docs_path: Optional path to directory of legacy doc files.
         glossary_path: Optional path to glossary JSON.
         output_mode: "sectioned" (default) or "bundled".
         push: If true, publish content to ReadMe (requires content_markdown).
@@ -103,28 +145,39 @@ def heal(
         dry_run: When pushing, preview without writing (default true).
         branch: ReadMe branch to publish to (default from settings).
     """
+    settings = get_settings()
+    resolved_spec_path, resolved_docs_path, resolved_glossary_path, error = _resolve_local_inputs(
+        settings,
+        spec_path,
+        docs_path,
+        glossary_path,
+    )
+    if error:
+        return error
+
+    assert resolved_spec_path is not None
+    assert resolved_docs_path is not None
+
     if push:
-        settings = get_settings()
         if content_markdown is None:
             return json.dumps({"error": "content_markdown is required when push=true."})
         result = run_heal_push(
             endpoint=endpoint,
             content_markdown=content_markdown,
-            spec_path=spec_path,
-            docs_path=docs_path,
-            glossary_path=glossary_path,
+            spec_path=resolved_spec_path,
+            docs_path=resolved_docs_path,
+            glossary_path=resolved_glossary_path,
             settings=settings,
             branch=branch,
             dry_run=dry_run,
         )
         return json.dumps(result, indent=2, default=str)
 
-    settings = get_settings()
     result = run_heal(
         endpoint=endpoint,
-        spec_path=spec_path,
-        docs_path=docs_path,
-        glossary_path=glossary_path,
+        spec_path=resolved_spec_path,
+        docs_path=resolved_docs_path,
+        glossary_path=resolved_glossary_path,
         settings=settings,
         output_mode=output_mode,
     )
@@ -167,8 +220,12 @@ def audit(
 def glossary_resource() -> str:
     """Business term glossary with aliases -- used for terminology normalization."""
     settings = get_settings()
-    glossary = load_glossary(settings.glossary_path)
-    terms = []
+    glossary_path = settings.resolved_glossary_path
+    if not glossary_path:
+        return json.dumps({"terms": [], "count": 0}, indent=2)
+
+    glossary = load_glossary(glossary_path)
+    terms: list[dict[str, object]] = []
     for entry in glossary.entries:
         terms.append({
             "term": entry.term,
@@ -183,7 +240,7 @@ def glossary_resource() -> str:
 def endpoint_index_resource(spec_path: str) -> str:
     """Endpoint index parsed from an OpenAPI spec."""
     spec = parse_spec(spec_path)
-    endpoints = []
+    endpoints: list[dict[str, object]] = []
     for op in spec.operations:
         endpoints.append({
             "method": op.method.upper(),

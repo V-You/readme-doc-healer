@@ -9,9 +9,10 @@ from readme_doc_healer.glossary import load_glossary, Glossary
 from readme_doc_healer.config import get_settings, Settings
 
 _BASE = Path(__file__).resolve().parents[1] / "base_data"
-_SPEC_PATH = _BASE / "ACI Merchant Onboarding API.best.openapi.yaml"
-_DOCS_PATH = _BASE / "Legacy-Documentation"
-_GLOSSARY_PATH = _BASE / "glossary.json"
+_SETTINGS = get_settings()
+_SPEC_PATH = Path(_SETTINGS.resolved_spec_path or (_BASE / "ACI Merchant Onboarding API.best.openapi.yaml"))
+_DOCS_PATH = Path(_SETTINGS.resolved_docs_path or (_BASE / "Legacy-Documentation"))
+_GLOSSARY_PATH = Path(_SETTINGS.resolved_glossary_path or (_BASE / "glossary.json"))
 
 
 @pytest.fixture(scope="session")

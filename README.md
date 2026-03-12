@@ -1,16 +1,16 @@
 # ReadMe Doc Healer
 
-An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project -- all from the IDE. Uses real data from the ACI Merchant Onboarding API.
+An MCP server that diagnoses legacy API documentation gaps against an OpenAPI spec, assembles context for the host LLM to generate improved ReadMe-compatible content, and surfaces live quality signals from a ReadMe project – all from the IDE. Uses real data from the ACI Web API.
 
-| `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the GET <br>/channels/{channelId} endpoint | Run the full diagnose-heal-audit loop <br>on the demo data |
+| `/doc-healer` Analyze the <br>Web API docs for gaps | Heal the endpoint <br>GET /channels/{channelId}  | Run the full diagnose-heal-audit loop <br>on the demo data |
 |---|---|---|
 | <kbd><img src="img/" alt="" width="" /></kbd>|<kbd><img src="img/" alt="" width="" /></kbd> | <kbd><img src="img/" alt="" width="" /></kbd> |
 
-8C830FBA
+
 
 ## The 1,252 problem
 
-The Merchant Onboarding API exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all.
+The Web API exposes **1,252 configuration options** across two endpoints. Only half have meaningful descriptions. Customer documentation had drifted from the spec. The frontend config manuals weren't connected to the API calls at all.
 
 This tool was built to make that API usable. `diagnose` finds **474 documentation gaps** across 72 operations. `heal` assembles the context so an LLM can write the fix. `audit` checks whether users noticed the improvement.
 
@@ -22,7 +22,7 @@ Parses an OpenAPI spec and a directory of legacy docs (Confluence HTML exports).
 
 - **Matching strategies:** path_exact (literal endpoint paths in HTML), filename_fuzzy (operation keywords in filenames), glossary_alias (business term normalization)
 - **Vagueness detection:** rule-based heuristics with `needs_llm_review` flags for borderline cases
-- **No API key needed** -- local files only
+- **No API key needed** – local files only
 
 ### `heal`
 
@@ -31,7 +31,7 @@ Assembles structured context for a specific endpoint so the host LLM can generat
 - **Output modes:** `sectioned` (default, for review) or `bundled` (single blob)
 - **Workflow detection:** chapter grouping from Confluence index.html, resource clustering from path segments
 - **Push mode:** when `push=true`, creates or updates guide pages on ReadMe via the Refactored v2 API. Dry-run by default
-- **No in-tool LLM calls** -- the host LLM does the writing
+- **No in-tool LLM calls** – the host LLM does the writing
 
 ### `audit`
 
@@ -43,12 +43,14 @@ Connects to a live ReadMe project and surfaces support-relevant quality signals:
 
 ## MCP Apps
 
-Both `diagnose` and `audit` render as interactive HTML5 visualizations via the `ui://` scheme (`text/html;profile=mcp-app`):
+`diagnose` and `audit` render as interactive HTML5 visualizations via `ui://` scheme (`text/html;profile=mcp-app`). When the MCP client doesn't support MCP Apps, tools return plain JSON + markdown.
 
-- **Gap matrix** (`ui://gap-matrix/{spec_path}/{docs_path}`) -- color-coded severity distribution, gap type bars, expandable endpoint details
-- **Audit dashboard** (`ui://audit-dashboard`) -- score gauge, worst pages table, failed searches, negative feedback
+- **Gap matrix** (`ui://gap-matrix/{spec_path}/{docs_path}`):  
+color-coded severity distribution, gap type bars, expandable endpoint details 
+- **Audit dashboard** (`ui://audit-dashboard`):  
+score gauge, worst pages table, failed searches, negative feedback
 
-When the MCP client doesn't support MCP Apps, tools return plain JSON + markdown.
+
 
 ## Resources
 
@@ -66,9 +68,10 @@ cd readme-doc-healer
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# configure (optional -- only needed for push mode and live audit)
-cp .env.example .env
-# edit .env: README_API_KEY=rdme_...
+# configure local defaults in .env
+# README_API_KEY=rdme_...     # optional - needed for push mode and live audit
+# PROJECT_NAME="ACI"         # display name for the local demo/input project
+# PROJECT_DIR="ACI"          # folder name under base_data/
 
 # run the server
 readme-doc-healer
@@ -80,24 +83,25 @@ Add to your MCP client config (VS Code settings, Claude Desktop, etc.):
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "readme-doc-healer": {
-      "command": "readme-doc-healer",
-      "args": []
+      "command": "${workspaceFolder}/.venv/bin/readme-doc-healer",
+      "type": "stdio"
     }
   }
 }
+
 ```
 
 ### Example workflow
 
 ```
-> diagnose base_data/ACI Merchant Onboarding API.best.openapi.yaml base_data/Legacy-Documentation
+> diagnose
 
 474 gaps found across 72 endpoints.
 Critical: 181, Warning: 246, Info: 47
 
-> heal updateMerchantAccount base_data/ACI... base_data/Legacy-Documentation
+> heal updateMerchantAccount
 
 52 gaps for PUT /merchants/{merchantId}
 Spec fragment, legacy snippets, and workflow candidates assembled.
@@ -116,11 +120,29 @@ Triage report: 5 worst pages, 5 zero-result searches, 3 negative feedback pages
 
 ## Demo data
 
-All demo data lives in `base_data/`:
+The server now resolves local demo data from `.env`:
+
+- `PROJECT_NAME` is the display label for the active local project
+- `PROJECT_DIR` is the folder name under `base_data/`
+- The server prefers `base_data/<PROJECT_DIR>/...`
+- If files are not present there yet, it falls back to the legacy flat `base_data/` layout
+
+Preferred layout:
+
+```text
+base_data/
+  <PROJECT_DIR>/
+    <OpenAPI spec file>
+    Legacy-Documentation/
+    glossary.json
+    audit-fixture.json
+```
+
+Current bundled demo files still exist in the legacy flat `base_data/` layout:
 
 | File | Description |
 |------|-------------|
-| `ACI Merchant Onboarding API.best.openapi.yaml` | Merged best-of OpenAPI spec (72 operations, 38 paths) |
+| `ACI Web API.best.openapi.yaml` | Merged best-of OpenAPI spec (72 operations, 38 paths) |
 | `Legacy-Documentation/` | Confluence HTML export (68 files) with `index.html` table of contents |
 | `glossary.json` | 25 business terms with aliases, definitions, and context tags |
 | `audit-fixture.json` | Canned metrics for offline audit demo |
@@ -163,14 +185,14 @@ Key decision: `heal` does NOT call an LLM. It assembles context; the host LLM ge
 | Surface | Base URL | Auth | Notes |
 |---------|----------|------|-------|
 | ReadMe API v2 | `api.readme.com/v2` | Bearer | Guides, categories, recipes, search, branches |
-| Metrics API | `metrics.readme.io/v2` | Basic (key:) | Page quality, search terms -- Enterprise only |
+| Metrics API | `metrics.readme.io/v2` | Basic (key:) | Page quality, search terms – Enterprise only |
 
 `diagnose` needs no API key. `heal` needs a key only for push mode. `audit` live mode needs an Enterprise-tier key; falls back to fixture otherwise.
 
 ## Tests
 
 ```bash
-pytest                   # 26 tests, ~35s
+pytest                   # 51 tests
 pytest -x -q             # quick run, stop on first failure
 pytest tests/test_fixtures.py     # matching and parsing tests
 pytest tests/test_heal_audit.py   # heal context assembly + audit
@@ -209,3 +231,11 @@ pytest tests/test_heal_audit.py   # heal context assembly + audit
 ### Conversion of multiple web API sources into one "best"
 
 `build_best_openapi.py` generates the merged outputs. It lifts Postman request-body field descriptions into the OpenAPI schema, keeps the stronger structural conversion, restores proper header apiKey auth, adds operationIds, adds both UAT and LIVE servers, and keeps duplicate-source metadata.
+
+### Future consideration
+
+- Standardize filenames inside `base_data/<PROJECT_DIR>/` so the server does not need to heuristically pick the OpenAPI spec file.
+
+---
+
+8C830FBA
