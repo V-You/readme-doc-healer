@@ -5,11 +5,11 @@ An MCP server that diagnoses legacy API documentation gaps against an OpenAPI sp
 <table>
   <thead>
     <tr>
-      <th><kbd><b>/doc-healer</b></kbd> <small>Analyze <br>the API docs for gaps</small></th>
-      <th><kbd><b>/doc-healer</b></kbd> <small>Heal endpoint <br>GET /channels/{channelId}</small></th>
-      <th><small>Push <br>(after dry run)</small></th>
-      <th><small>Before / After (pages)</small></th>
-      <th><small>Before / After (audit tool)</small></th>
+      <th><kbd><b>/doc-healer</b></kbd> <sub>Analyze <br>the API docs for gaps</sub></th>
+      <th><kbd><b>/doc-healer</b></kbd> <sub>Heal endpoint <br>GET /channels/{channelId}</sub></th>
+      <th><sub>Push <br>(after dry run)</sub></th>
+      <th><sub>Before / After (pages)</sub></th>
+      <th><sub>Before / After (audit tool)</sub></th>
     </tr>
   </thead>
   <tbody>
