@@ -135,6 +135,12 @@ Guide created at https://doc-healer.readme.io/docs/update-merchant-account
 Triage report: 5 worst pages, 5 zero-result searches, 3 negative feedback pages
 ```
 
+## From “reference docs” to “how do I actually enable a feature”
+
+Doc Healer supports [https://docs.readme.com/main/docs/recipes](recipes). Working towards recipes is extremely valuable. It takes the user from "this high quality documentation promises predictable results" to actually *getting the results*. Recipes are naturally tied to their API. We selected 7 common needs: 3D Secure, AVS validation, dupe detection, CVV validation, basic risk checking, basic Chargeback config, Account Updater.
+
+---
+
 ## Source data
 
 The server resolves local data from `.env`:
@@ -153,6 +159,8 @@ base_data/
     Legacy-Documentation/
     glossary.json
     audit-fixture.json
+    riro_consolidated_lookup.json
+    settings_recipes.json
 ```
 
 | File | Description |
@@ -161,6 +169,9 @@ base_data/
 | `Legacy-Documentation/` | Confluence HTML export (68 files) with `index.html` table of contents |
 | `glossary.json` | 25 business terms with aliases, definitions, and context tags |
 | `audit-fixture.json` | Canned metrics for offline audit demo |
+| `riro_consolidated_lookup.json` | Optional |
+| `settings_recipes.json` | Optional |
+
 
 ## Architecture
 
