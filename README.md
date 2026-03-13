@@ -33,10 +33,11 @@ The “Web API” exposes 72 endpoints. Two of them cover 1,252 configuration op
 
 ### `diagnose`
 
-Parses an OpenAPI spec and a directory of legacy docs (Confluence HTML exports). Produces a structured gap report: missing descriptions, vague parameters, missing examples, terminology drift, undocumented endpoints.
+Parses an OpenAPI spec and a directory of legacy docs (Confluence HTML exports). Produces a structured gap report: missing descriptions, vague parameters, missing examples, terminology drift, undocumented endpoints. When a `settings_recipes.json` file is available, also validates recipe quality – setting ID joins against the config lookup, related-recipe references, category consistency, and operation mapping.
 
 - **Matching strategies:** path_exact (literal endpoint paths in HTML), filename_fuzzy (operation keywords in filenames), glossary_alias (business term normalization)
 - **Vagueness detection:** rule-based heuristics with `needs_llm_review` flags for borderline cases
+- **Recipe quality:** validates recipe catalog integrity, reports unresolved setting IDs, unmapped recipes, and broken cross-references
 - **No API key needed** – local files only
 
 ### `heal`
@@ -135,9 +136,11 @@ Guide created at https://doc-healer.readme.io/docs/update-merchant-account
 Triage report: 5 worst pages, 5 zero-result searches, 3 negative feedback pages
 ```
 
-## From “reference docs” to “how do I actually enable a feature”
+## From “reference docs” to “how do I actually enable a feature” - *Recipes*
 
 Doc Healer supports [https://docs.readme.com/main/docs/recipes](recipes). Working towards recipes is extremely valuable. It takes the user from "this high quality documentation promises predictable results" to actually *getting the results*. Recipes are naturally tied to their API. We selected 7 common needs: 3D Secure, AVS validation, dupe detection, CVV validation, basic risk checking, basic Chargeback config, Account Updater.
+
+The `diagnose` tool validates the recipe catalog. It checks that all `setting_id` references resolve against the config lookup, that `related_recipes` point to existing recipe IDs, and that each recipe's category appears in the top-level categories list. The summary output includes a `recipe_quality` block and a `worst_recipes` ranking. This shows which recipes need attention before publishing.
 
 ---
 
@@ -169,8 +172,8 @@ base_data/
 | `Legacy-Documentation/` | Confluence HTML export (68 files) with `index.html` table of contents |
 | `glossary.json` | 25 business terms with aliases, definitions, and context tags |
 | `audit-fixture.json` | Canned metrics for offline audit demo |
-| `riro_consolidated_lookup.json` | Optional |
-| `settings_recipes.json` | Optional |
+| `riro_consolidated_lookup.json` | Optional – 1225 RiRo config keys with id, type, path, default. Drives the config quality card in diagnose |
+| `settings_recipes.json` | Optional – recipe catalog (7 recipes, 3 categories) linking entity settings and merchant account fields into end-to-end workflows. Drives the recipe quality section in diagnose |
 
 
 ## Architecture
@@ -208,6 +211,10 @@ The OpenAPI specification is checked for vagueness, and rated for quality (`vagu
 #### Config quality
 
 Only very limited details on config quality (key-based calls) are shown in Gap matrix. With 1252 (and growing) possible calls, it would not be useful to show them all. We show only samples, and add short notes. *Labels* and a *collapsible card* are used to distinguish endpoint-gap count and key-level count. The feature is - currently - directly tied to the presence of a file named "riro_consolidated_lookup.json". **Frontend breadcrumbs should be excluded entirely (may even be paid feature). Or, add a capability to export the full config lookup for external reference. Or, adjust the heal context to generate better linking text.**
+
+#### Recipe quality
+
+When `settings_recipes.json` is present, diagnose loads and validates the recipe catalog. Each recipe's `setting_id` values are joined against `ConfigLookupEntry.id` from the config lookup. Related-recipe references, category membership, and operation mapping (via `tool` fields as operationId hints) are cross-checked. The summary reports valid/invalid recipe counts, unresolved setting IDs, unmapped recipes, and per-category distribution. In `summary_only` mode, the top 5 worst recipes (by issue count) are included alongside the existing worst-endpoints list.
 
 #### Why are missing examples "critical"
 
