@@ -75,6 +75,15 @@ score gauge, worst pages table, failed searches, negative feedback
 | `glossary://terms` | Business term glossary with aliases (example: Contact = user) |
 | `endpoints://{spec_path}` | Endpoint index parsed from an OpenAPI spec |
 
+### Example files and workflows
+| File | Role |
+| --- | --- |
+| `glossary.json` | Resolves terminology drift (e.g., "Contact" = "User"). Diagnose uses it for matching; heal includes it in context |
+| `riro_consolidated_lookup.json` | 1,225 config keys. Diagnose joins recipes against it, reports config quality (missing defaults, brittle UI paths, verbose default phrases) |
+| `settings_recipes.json` | 7 recipes linking settings into end-to-end workflows. Diagnose validates recipe integrity (setting ID resolution, cross-references, category consistency) |
+
+###
+
 ## Quick start
 
 ```bash
@@ -208,6 +217,14 @@ VS Code / IDE
 
 The OpenAPI specification is checked for vagueness, and rated for quality (`vagueness.py`). The separate `doc_scanner.py` is used for matching, snippet extraction, and finding structured data (param details, examples, error codes). `Heal` does not write back to the OpenAPI spec. The output is the *ReadMe guide page*, pushed to api.readme/v2. Design decision is: *The gap lives in the spec, the fix lands in ReadMe*. Spec Healer is a potential future tool. While this situation is present throughout, it's especially visible for the recently introduced "APO token operations". They are described in the "legacy" (official) documentation, and they work as expected. But: they are missing in the OpenAPI spec, because they have not officially been added to the Postman Collection that the "best version" of the OpenAPI spec is based on. This is exactly the kind of drift we are trying to fix.
 
+#### Doc healing vs readme.io
+
+Push mode (heal with push=true): Once the LLM generates improved documentation (and is approved), `heal` creates or updates guide pages on readme.io via the Refactored v2 API. This is how the fixes reach end users (default: dry-run).
+
+Live `audit` (audit with offline=false): Pulls metrics from metrics.readme.io – page quality scores, zero-result searches, negative user feedback. This closes the loop: the Healer diagnoses, heals, pushes. The audit confirms if users noticed the improvement.
+
+Without the readme.io connection - can't publish or measure.
+
 #### Config quality
 
 Only very limited details on config quality (key-based calls) are shown in Gap matrix. With 1252 (and growing) possible calls, it would not be useful to show them all. We show only samples, and add short notes. *Labels* and a *collapsible card* are used to distinguish endpoint-gap count and key-level count. The feature is - currently - directly tied to the presence of a file named "riro_consolidated_lookup.json". **Frontend breadcrumbs should be excluded entirely (may even be paid feature). Or, add a capability to export the full config lookup for external reference. Or, adjust the heal context to generate better linking text.**
@@ -219,6 +236,16 @@ When `settings_recipes.json` is present, diagnose loads and validates the recipe
 #### Why are missing examples "critical"
 
 Missing examples in OpenAPI are flagged as **critical**, even when examples do exist in auxiliary docs. OpenAPI 3.x has explicit example fields on media type objects and schema objects. Tools like ReadMe, Swagger UI, Redocly render them. The spec missing examples is a genuine gap that needs to be healed. The *gap message* will note when a matched legacy doc has examples available (so the user/LLM knows where to source the fix). The *heal step* extracts the actual example JSON from legacy HTML (success response, error response, sample call) for the LLM to propose adding them to the OpenAPI spec.
+
+#### Potential negative side-effects
+
+Heal does not call an LLM itself (architecture decision). It assembles structured context (spec fragment, legacy snippets, gap entries, extracted examples, param constraints, error codes) and hands it to the host LLM. If the model is weak, it may misinterprete "aA" for alphabetic input even when literal string "aA" is expected (example). The guardrail is human review before push.
+
+What reaches the end user? - **Only the ReadMe guide pages.** The `heal(push=true)` workflow creates/updates a **markdown guide page** on readme.io via the v2 API. It does NOT upload the OpenAPI spec to ReadMe. It modifies NO local files. End users see the healed documentation as ReadMe guide pages.
+
+#### Local store of wins
+
+Controlled by env var. Add details
 
 
 ## Tech stack
@@ -239,6 +266,9 @@ Missing examples in OpenAPI are flagged as **critical**, even when examples do e
 
 `diagnose` needs no API key. `heal` needs a key only for push mode. `audit` live mode needs an Enterprise-tier key; or fallback to fixture.
 
+## See also
+
+- New [https://docs.readme.com/main/docs/readmes-mcp-server](ReadMe MCP server) that also supports work from directly within the dev's IDE
 
 ---
 
