@@ -145,6 +145,32 @@ Guide created at https://doc-healer.readme.io/docs/update-merchant-account
 Triage report: 5 worst pages, 5 zero-result searches, 3 negative feedback pages
 ```
 
+## Spec enrichment
+
+In addition to the MCP tools, the repo includes a batch workflow for enriching the canonical OpenAPI spec with structured data extracted from the legacy Confluence export.
+
+- `scripts/report_character_values.py` inventories raw `Character` column values from legacy docs and writes a JSON review report.
+- `scripts/enrich_openapi.py` applies the reviewed Character mapping plus high-confidence enrichments for `pattern`, `enum`, `maxLength`, required fields, empty descriptions, response examples, request examples, error responses, and `x-enriched-from` traceability.
+- Dry-run is the default. It writes a mapping summary report and leaves the spec untouched.
+- Apply mode writes a candidate `.best.enriched.openapi.*` file plus a change report. Promotion to canonical `best` remains a manual review step.
+
+Example commands:
+
+```bash
+python scripts/report_character_values.py \
+  --docs base_data/ACI/Legacy-Documentation \
+  --output result_data/enrich/aci-character-values.json
+
+python scripts/enrich_openapi.py \
+  --spec base_data/ACI/ACI\ Merchant\ Onboarding\ API.best.openapi.yaml \
+  --docs base_data/ACI/Legacy-Documentation
+
+python scripts/enrich_openapi.py \
+  --spec base_data/ACI/ACI\ Merchant\ Onboarding\ API.best.openapi.yaml \
+  --docs base_data/ACI/Legacy-Documentation \
+  --apply
+```
+
 ## From “reference docs” to “how do I actually enable a feature” - *Recipes*
 
 Doc Healer supports [https://docs.readme.com/main/docs/recipes](recipes). Working towards recipes is extremely valuable. It takes the user from "this high quality documentation promises predictable results" to actually *getting the results*. Recipes are naturally tied to their API. We selected 7 common needs: 3D Secure, AVS validation, dupe detection, CVV validation, basic risk checking, basic Chargeback config, Account Updater.

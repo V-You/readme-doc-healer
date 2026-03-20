@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import shutil
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,11 +23,20 @@ HTTP_METHODS = {"get", "post", "put", "delete", "patch", "options", "head", "tra
 WRITE_ACTIONS = {"apply_pattern", "apply_enum"}
 CONDITIONAL_ACTIONS = {"suggest_boolean", "suggest_format"}
 NON_WRITE_ACTIONS = {"skip", "review"}
+APPLYABLE_ACTIONS = WRITE_ACTIONS | CONDITIONAL_ACTIONS
 
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from readme_doc_healer.doc_scanner import ScannedDoc, scan_docs_directory
+
+
+@dataclass
+class SchemaTarget:
+    schema_obj: dict[str, Any]
+    target_kind: str
+    parameter_obj: dict[str, Any] | None = None
+    parent_schema_obj: dict[str, Any] | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -337,10 +348,10 @@ def find_parameter_schema_targets(
     path_item: dict[str, Any],
     operation: dict[str, Any],
     field_name: str,
-) -> list[dict[str, Any]]:
+) -> list[SchemaTarget]:
     field_name_lower = field_name.lower()
-    seen_schema_ids: set[int] = set()
-    targets: list[dict[str, Any]] = []
+    seen_target_ids: set[tuple[int, int]] = set()
+    targets: list[SchemaTarget] = []
 
     for container in (path_item.get("parameters") or [], operation.get("parameters") or []):
         if not isinstance(container, list):
@@ -357,12 +368,18 @@ def find_parameter_schema_targets(
             if not isinstance(schema_obj, dict):
                 continue
 
-            schema_id = id(schema_obj)
-            if schema_id in seen_schema_ids:
+            target_id = (id(param_obj), id(schema_obj))
+            if target_id in seen_target_ids:
                 continue
 
-            seen_schema_ids.add(schema_id)
-            targets.append(schema_obj)
+            seen_target_ids.add(target_id)
+            targets.append(
+                SchemaTarget(
+                    schema_obj=schema_obj,
+                    target_kind="parameter",
+                    parameter_obj=param_obj,
+                )
+            )
 
     return targets
 
@@ -371,10 +388,10 @@ def find_schema_property_targets(
     spec: dict[str, Any],
     schema_obj: dict[str, Any],
     field_name: str,
-) -> list[dict[str, Any]]:
+) -> list[SchemaTarget]:
     field_name_lower = field_name.lower()
     seen_nodes: set[int] = set()
-    targets_by_id: dict[int, dict[str, Any]] = {}
+    targets_by_id: dict[tuple[int, int], SchemaTarget] = {}
 
     def walk(candidate: dict[str, Any]) -> None:
         resolved_candidate = resolve_object_dict(spec, candidate, set())
@@ -394,10 +411,13 @@ def find_schema_property_targets(
 
                 if prop_name.lower() == field_name_lower:
                     resolved_prop = resolve_object_dict(spec, prop_schema, set())
-                    if isinstance(resolved_prop, dict):
-                        targets_by_id[id(resolved_prop)] = resolved_prop
-                    else:
-                        targets_by_id[id(prop_schema)] = prop_schema
+                    actual_prop = resolved_prop if isinstance(resolved_prop, dict) else prop_schema
+                    target_key = (id(actual_prop), id(resolved_candidate))
+                    targets_by_id[target_key] = SchemaTarget(
+                        schema_obj=actual_prop,
+                        target_kind="request_body_property",
+                        parent_schema_obj=resolved_candidate,
+                    )
 
                 walk(prop_schema)
 
@@ -424,7 +444,7 @@ def find_request_body_schema_targets(
     spec: dict[str, Any],
     operation: dict[str, Any],
     field_name: str,
-) -> list[dict[str, Any]]:
+) -> list[SchemaTarget]:
     request_body = resolve_object_dict(spec, operation.get("requestBody"), set())
     if not isinstance(request_body, dict):
         return []
@@ -433,7 +453,7 @@ def find_request_body_schema_targets(
     if not isinstance(content, dict):
         return []
 
-    targets_by_id: dict[int, dict[str, Any]] = {}
+    targets_by_id: dict[tuple[int, int], SchemaTarget] = {}
     for media in content.values():
         if not isinstance(media, dict):
             continue
@@ -443,9 +463,61 @@ def find_request_body_schema_targets(
             continue
 
         for target in find_schema_property_targets(spec, schema, field_name):
-            targets_by_id[id(target)] = target
+            target_key = (id(target.schema_obj), id(target.parent_schema_obj or {}))
+            targets_by_id[target_key] = target
 
     return list(targets_by_id.values())
+
+
+def get_request_body_media_targets(
+    spec: dict[str, Any],
+    operation: dict[str, Any],
+) -> list[tuple[str, dict[str, Any]]]:
+    request_body = resolve_object_dict(spec, operation.get("requestBody"), set())
+    if not isinstance(request_body, dict):
+        return []
+
+    content = request_body.get("content")
+    if not isinstance(content, dict):
+        return []
+
+    json_targets: list[tuple[str, dict[str, Any]]] = []
+    other_targets: list[tuple[str, dict[str, Any]]] = []
+    for media_type, media_obj in content.items():
+        if not isinstance(media_obj, dict):
+            continue
+        entry = (str(media_type), media_obj)
+        if str(media_type).lower() == "application/json":
+            json_targets.append(entry)
+        else:
+            other_targets.append(entry)
+
+    return json_targets + other_targets
+
+
+def get_response_media_target(
+    spec: dict[str, Any],
+    operation: dict[str, Any],
+    status_code: str,
+    media_type: str = "application/json",
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    responses = operation.get("responses")
+    if not isinstance(responses, dict):
+        return None, None
+
+    response_obj = resolve_object_dict(spec, responses.get(status_code), set())
+    if not isinstance(response_obj, dict):
+        return None, None
+
+    content = response_obj.get("content")
+    if not isinstance(content, dict):
+        return response_obj, None
+
+    media_obj = content.get(media_type)
+    if not isinstance(media_obj, dict):
+        return response_obj, None
+
+    return response_obj, media_obj
 
 
 def rule_applies_to_target(rule: dict[str, Any], field_name: str, schema_obj: dict[str, Any]) -> bool:
@@ -482,6 +554,235 @@ def rule_applies_to_target(rule: dict[str, Any], field_name: str, schema_obj: di
     return True
 
 
+def normalize_field_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def description_is_empty_or_echo(field_name: str, description: Any) -> bool:
+    if not isinstance(description, str) or not description.strip():
+        return True
+    return normalize_field_text(description) == normalize_field_text(field_name)
+
+
+def parse_numeric_length(length_value: str) -> int | None:
+    stripped = length_value.strip()
+    if not stripped or not re.fullmatch(r"\d+", stripped):
+        return None
+    return int(stripped)
+
+
+def parse_required_flag(required_value: str) -> bool | None:
+    stripped = required_value.strip().lower()
+    if not stripped:
+        return None
+    if stripped.startswith("required"):
+        return True
+    if stripped.startswith("optional"):
+        return False
+    return None
+
+
+def add_traceability(target_obj: dict[str, Any], source_doc: str) -> None:
+    existing = target_obj.get("x-enriched-from")
+    if existing is None:
+        target_obj["x-enriched-from"] = source_doc
+        return
+
+    if isinstance(existing, str):
+        if existing != source_doc:
+            target_obj["x-enriched-from"] = [existing, source_doc]
+        return
+
+    if isinstance(existing, list) and source_doc not in existing:
+        existing.append(source_doc)
+
+
+def media_has_example(media_obj: dict[str, Any]) -> bool:
+    if "example" in media_obj and media_obj["example"] is not None:
+        return True
+
+    examples = media_obj.get("examples")
+    if isinstance(examples, dict):
+        return bool(examples)
+    if isinstance(examples, list):
+        return bool(examples)
+    return False
+
+
+def apply_max_length(schema_obj: dict[str, Any], max_length: int) -> tuple[bool, str]:
+    if max_length < 0:
+        return False, "invalid_max_length"
+    if schema_obj.get("maxLength") is not None:
+        return False, "existing_max_length"
+    schema_obj["maxLength"] = max_length
+    return True, "applied_max_length"
+
+
+def apply_required_constraint(target: SchemaTarget, field_name: str) -> tuple[bool, str, dict[str, Any] | None]:
+    if target.parameter_obj is not None:
+        if target.parameter_obj.get("required") is True:
+            return False, "existing_required", target.parameter_obj
+        target.parameter_obj["required"] = True
+        return True, "applied_required", target.parameter_obj
+
+    parent_schema = target.parent_schema_obj
+    if not isinstance(parent_schema, dict):
+        return False, "missing_parent_schema", None
+
+    required_fields = parent_schema.get("required")
+    if required_fields is None:
+        parent_schema["required"] = [field_name]
+        return True, "applied_required", parent_schema
+
+    if not isinstance(required_fields, list):
+        return False, "invalid_required_container", parent_schema
+
+    if field_name in required_fields:
+        return False, "existing_required", parent_schema
+
+    required_fields.append(field_name)
+    return True, "applied_required", parent_schema
+
+
+def apply_description(schema_obj: dict[str, Any], field_name: str, description: str) -> tuple[bool, str]:
+    if not description.strip():
+        return False, "missing_description_source"
+    if not description_is_empty_or_echo(field_name, schema_obj.get("description")):
+        return False, "existing_description"
+    schema_obj["description"] = description.strip()
+    return True, "applied_description"
+
+
+def parse_json_example_body(body: str) -> tuple[Any | None, str | None]:
+    stripped = body.strip()
+    if not stripped:
+        return None, "empty_example"
+
+    try:
+        return json.loads(stripped), None
+    except json.JSONDecodeError as exc:
+        return None, f"invalid_json:{exc.msg}"
+
+
+def extract_json_body_from_sample_call(body: str) -> tuple[Any | None, str]:
+    stripped = body.strip()
+    if not stripped:
+        return None, "empty_sample_call"
+
+    if stripped.startswith("{") or stripped.startswith("["):
+        parsed, error = parse_json_example_body(stripped)
+        if parsed is not None:
+            return parsed, "parsed_raw_json"
+        return None, error or "invalid_json"
+
+    cleaned = re.sub(r"\\\s*\n", " ", stripped)
+    cleaned = cleaned.replace("\\", " ")
+
+    try:
+        tokens = shlex.split(cleaned)
+    except ValueError:
+        tokens = []
+
+    data_flags = {"-d", "--data", "--data-raw", "--data-binary"}
+    for idx, token in enumerate(tokens):
+        if token not in data_flags or idx + 1 >= len(tokens):
+            continue
+        candidate = tokens[idx + 1].strip()
+        parsed, error = parse_json_example_body(candidate)
+        if parsed is not None:
+            return parsed, "parsed_curl_data"
+        return None, error or "invalid_json"
+
+    return None, "unsupported_sample_call_format"
+
+
+def map_error_code_to_status(error_code: str) -> str | None:
+    match = re.match(r"\s*(\d{3})", error_code)
+    if not match:
+        return None
+    status_code = match.group(1)
+    if not 100 <= int(status_code) <= 599:
+        return None
+    return status_code
+
+
+def record_change(
+    changes: list[dict[str, Any]],
+    *,
+    doc: ScannedDoc,
+    spec_path: str,
+    method: str,
+    field_name: str | None,
+    section: str | None,
+    target_kind: str,
+    change_type: str,
+    source_value: Any = None,
+    target_value: Any = None,
+    media_type: str | None = None,
+    status_code: str | None = None,
+) -> None:
+    if len(changes) >= 600:
+        return
+
+    change_item: dict[str, Any] = {
+        "source_doc": doc.filename,
+        "source_title": doc.title,
+        "path": spec_path,
+        "method": method,
+        "section": section,
+        "field_name": field_name,
+        "target_kind": target_kind,
+        "change_type": change_type,
+    }
+
+    if source_value is not None:
+        change_item["source_value"] = source_value
+    if target_value is not None:
+        change_item["target_value"] = target_value
+    if media_type is not None:
+        change_item["media_type"] = media_type
+    if status_code is not None:
+        change_item["status_code"] = status_code
+
+    changes.append(change_item)
+
+
+def add_review_note(
+    notes: list[dict[str, Any]],
+    *,
+    doc: ScannedDoc,
+    note_type: str,
+    spec_path: str | None = None,
+    method: str | None = None,
+    field_name: str | None = None,
+    detail: str | None = None,
+    section: str | None = None,
+    source_value: Any = None,
+) -> None:
+    if len(notes) >= 400:
+        return
+
+    note: dict[str, Any] = {
+        "source_doc": doc.filename,
+        "source_title": doc.title,
+        "note_type": note_type,
+    }
+    if spec_path is not None:
+        note["path"] = spec_path
+    if method is not None:
+        note["method"] = method
+    if field_name is not None:
+        note["field_name"] = field_name
+    if detail is not None:
+        note["detail"] = detail
+    if section is not None:
+        note["section"] = section
+    if source_value is not None:
+        note["source_value"] = source_value
+
+    notes.append(note)
+
+
 def apply_write_action(schema_obj: dict[str, Any], rule: dict[str, Any]) -> tuple[bool, str]:
     action = rule.get("action")
     if action == "apply_pattern":
@@ -501,6 +802,51 @@ def apply_write_action(schema_obj: dict[str, Any], rule: dict[str, Any]) -> tupl
             return False, "existing_enum"
         schema_obj["enum"] = list(enum_values)
         return True, "applied_enum"
+
+    if action == "suggest_boolean":
+        spec_type = schema_obj.get("type")
+        if spec_type == "boolean":
+            return False, "existing_boolean_type"
+        if isinstance(spec_type, list) and "boolean" in spec_type:
+            return False, "existing_boolean_type"
+
+        if schema_obj.get("enum"):
+            return False, "existing_enum"
+        if schema_obj.get("pattern") or schema_obj.get("format"):
+            return False, "conflicting_schema_constraint"
+
+        fallback_enum = rule.get("fallback_string_enum")
+        if spec_type is None:
+            schema_obj["type"] = rule.get("preferred_type", "boolean")
+            return True, "applied_boolean_type"
+        if spec_type == "string":
+            if not isinstance(fallback_enum, list) or not fallback_enum:
+                return False, "missing_boolean_fallback"
+            schema_obj["enum"] = list(fallback_enum)
+            return True, "applied_boolean_enum"
+        if isinstance(spec_type, list) and "string" in spec_type:
+            if not isinstance(fallback_enum, list) or not fallback_enum:
+                return False, "missing_boolean_fallback"
+            schema_obj["enum"] = list(fallback_enum)
+            return True, "applied_boolean_enum"
+        return False, "incompatible_boolean_target"
+
+    if action == "suggest_format":
+        suggested_format = rule.get("suggested_format")
+        if not isinstance(suggested_format, str) or not suggested_format:
+            return False, "missing_suggested_format"
+        if schema_obj.get("format"):
+            return False, "existing_format"
+        if schema_obj.get("pattern"):
+            return False, "conflicting_schema_constraint"
+
+        spec_type = schema_obj.get("type")
+        if spec_type is not None and spec_type != "string":
+            if not (isinstance(spec_type, list) and "string" in spec_type):
+                return False, "incompatible_format_target"
+
+        schema_obj["format"] = suggested_format
+        return True, "applied_format"
 
     return False, "unsupported_action"
 
@@ -631,7 +977,7 @@ def build_character_summary(
     }
 
 
-def apply_character_mapping(
+def apply_enrichment(
     spec: dict[str, Any],
     docs: list[ScannedDoc],
     mapping: dict[str, Any],
@@ -643,9 +989,13 @@ def apply_character_mapping(
     action_counts: Counter[str] = Counter()
     canonical_counts: Counter[str] = Counter()
     write_result_counts: Counter[str] = Counter()
+    metadata_result_counts: Counter[str] = Counter()
+    example_result_counts: Counter[str] = Counter()
+    error_response_result_counts: Counter[str] = Counter()
 
     docs_without_path_match: list[str] = []
     changes: list[dict[str, Any]] = []
+    review_notes: list[dict[str, Any]] = []
 
     for doc in docs:
         matched_paths = find_matched_spec_paths(doc, spec_paths)
@@ -654,6 +1004,14 @@ def apply_character_mapping(
             continue
 
         method_hints = infer_method_hints(doc.operation_name)
+        matched_operations: list[tuple[str, str, dict[str, Any], dict[str, Any]]] = []
+        for spec_path in matched_paths:
+            path_item = paths_obj.get(spec_path)
+            if not isinstance(path_item, dict):
+                continue
+            operations = iter_operations_for_path(path_item, method_hints)
+            for method, operation in operations:
+                matched_operations.append((spec_path, method, path_item, operation))
 
         for constraint in doc.param_constraints:
             counters["total_param_constraints"] += 1
@@ -662,89 +1020,334 @@ def apply_character_mapping(
                 continue
 
             raw_value = constraint.character.strip()
-            if not raw_value:
-                continue
+            resolved: dict[str, Any] | None = None
+            action: str | None = None
+            if raw_value:
+                counters["constraints_with_character_values"] += 1
+                resolved = resolve_character_rule(raw_value, mapping)
+                action = str(resolved.get("action"))
+                canonical_name = str(resolved.get("canonical_name"))
+                action_counts[action] += 1
+                canonical_counts[canonical_name] += 1
+                if action in NON_WRITE_ACTIONS:
+                    counters["constraints_non_write_action"] += 1
 
-            counters["constraints_with_character_values"] += 1
-            resolved = resolve_character_rule(raw_value, mapping)
-            action = str(resolved.get("action"))
-            canonical_name = str(resolved.get("canonical_name"))
-            action_counts[action] += 1
-            canonical_counts[canonical_name] += 1
+            target_entries: list[tuple[SchemaTarget, str, str]] = []
+            for spec_path, method, path_item, operation in matched_operations:
+                if constraint.section == "url_parameters":
+                    targets = find_parameter_schema_targets(spec, path_item, operation, constraint.name)
+                else:
+                    targets = find_request_body_schema_targets(spec, operation, constraint.name)
 
-            if action not in WRITE_ACTIONS:
-                counters["constraints_non_write_action"] += 1
-                continue
-
-            target_entries: list[tuple[dict[str, Any], str, str, str]] = []
-            for spec_path in matched_paths:
-                path_item = paths_obj.get(spec_path)
-                if not isinstance(path_item, dict):
-                    continue
-
-                operations = iter_operations_for_path(path_item, method_hints)
-                for method, operation in operations:
-                    if constraint.section == "url_parameters":
-                        targets = find_parameter_schema_targets(spec, path_item, operation, constraint.name)
-                        target_kind = "parameter"
-                    else:
-                        targets = find_request_body_schema_targets(spec, operation, constraint.name)
-                        target_kind = "request_body_property"
-
-                    for target in targets:
-                        target_entries.append((target, spec_path, method, target_kind))
+                for target in targets:
+                    target_entries.append((target, spec_path, method))
 
             if not target_entries:
                 counters["constraints_without_target"] += 1
+                if action == "review":
+                    add_review_note(
+                        review_notes,
+                        doc=doc,
+                        note_type="character_value_needs_review",
+                        field_name=constraint.name,
+                        section=constraint.section,
+                        detail="Constraint target was not found in the spec.",
+                        source_value=raw_value,
+                    )
                 continue
 
-            seen_target_ids: set[int] = set()
+            seen_target_ids: set[tuple[int, int, int, str, str]] = set()
             applied_for_constraint = False
 
-            for target_schema, spec_path, method, target_kind in target_entries:
-                target_id = id(target_schema)
+            for target, spec_path, method in target_entries:
+                target_id = (
+                    id(target.schema_obj),
+                    id(target.parameter_obj or {}),
+                    id(target.parent_schema_obj or {}),
+                    spec_path,
+                    method,
+                )
                 if target_id in seen_target_ids:
                     continue
                 seen_target_ids.add(target_id)
 
-                if not rule_applies_to_target(resolved, constraint.name, target_schema):
-                    counters["targets_filtered_by_apply_when"] += 1
-                    continue
+                if resolved is not None and action in APPLYABLE_ACTIONS:
+                    if not rule_applies_to_target(resolved, constraint.name, target.schema_obj):
+                        counters["targets_filtered_by_apply_when"] += 1
+                        write_result_counts["filtered_by_apply_when"] += 1
+                        add_review_note(
+                            review_notes,
+                            doc=doc,
+                            note_type="filtered_by_apply_when",
+                            spec_path=spec_path,
+                            method=method,
+                            field_name=constraint.name,
+                            section=constraint.section,
+                            detail=f"Rule '{action}' did not meet apply_when conditions.",
+                            source_value=raw_value,
+                        )
+                    else:
+                        applied, result_code = apply_write_action(target.schema_obj, resolved)
+                        write_result_counts[result_code] += 1
+                        if applied:
+                            applied_for_constraint = True
+                            counters["applied_changes"] += 1
+                            add_traceability(target.schema_obj, doc.filename)
+                            record_change(
+                                changes,
+                                doc=doc,
+                                spec_path=spec_path,
+                                method=method,
+                                field_name=constraint.name,
+                                section=constraint.section,
+                                target_kind=target.target_kind,
+                                change_type=action,
+                                source_value=raw_value,
+                                target_value=(resolved.get("pattern") or resolved.get("enum") or resolved.get("suggested_format") or resolved.get("preferred_type")),
+                            )
+                        elif action in CONDITIONAL_ACTIONS and result_code not in {"existing_boolean_type", "existing_format"}:
+                            add_review_note(
+                                review_notes,
+                                doc=doc,
+                                note_type="conditional_rule_not_applied",
+                                spec_path=spec_path,
+                                method=method,
+                                field_name=constraint.name,
+                                section=constraint.section,
+                                detail=result_code,
+                                source_value=raw_value,
+                            )
+                elif action == "review":
+                    add_review_note(
+                        review_notes,
+                        doc=doc,
+                        note_type="character_value_needs_review",
+                        spec_path=spec_path,
+                        method=method,
+                        field_name=constraint.name,
+                        section=constraint.section,
+                        detail=resolved.get("reason") if resolved else None,
+                        source_value=raw_value,
+                    )
 
-                applied, result_code = apply_write_action(target_schema, resolved)
-                write_result_counts[result_code] += 1
-                if not applied:
-                    continue
+                max_length = parse_numeric_length(constraint.length)
+                if max_length is not None:
+                    applied, result_code = apply_max_length(target.schema_obj, max_length)
+                    metadata_result_counts[result_code] += 1
+                    if applied:
+                        applied_for_constraint = True
+                        counters["applied_changes"] += 1
+                        add_traceability(target.schema_obj, doc.filename)
+                        record_change(
+                            changes,
+                            doc=doc,
+                            spec_path=spec_path,
+                            method=method,
+                            field_name=constraint.name,
+                            section=constraint.section,
+                            target_kind=target.target_kind,
+                            change_type="max_length",
+                            source_value=constraint.length,
+                            target_value=max_length,
+                        )
 
-                applied_for_constraint = True
-                counters["applied_changes"] += 1
+                required_flag = parse_required_flag(constraint.required)
+                if required_flag is True:
+                    applied, result_code, trace_target = apply_required_constraint(target, constraint.name)
+                    metadata_result_counts[result_code] += 1
+                    if applied and trace_target is not None:
+                        applied_for_constraint = True
+                        counters["applied_changes"] += 1
+                        add_traceability(trace_target, doc.filename)
+                        record_change(
+                            changes,
+                            doc=doc,
+                            spec_path=spec_path,
+                            method=method,
+                            field_name=constraint.name,
+                            section=constraint.section,
+                            target_kind=target.target_kind,
+                            change_type="required",
+                            source_value=constraint.required,
+                            target_value=True,
+                        )
 
-                if len(changes) < 400:
-                    change_item: dict[str, Any] = {
-                        "source_doc": doc.filename,
-                        "source_title": doc.title,
-                        "path": spec_path,
-                        "method": method,
-                        "section": constraint.section,
-                        "field_name": constraint.name,
-                        "target_kind": target_kind,
-                        "action": action,
-                        "canonical_name": canonical_name,
-                        "normalized_value": resolved.get("normalized_value"),
-                        "result_code": result_code,
-                    }
-
-                    if action == "apply_pattern":
-                        change_item["pattern"] = resolved.get("pattern")
-                    if action == "apply_enum":
-                        change_item["enum"] = resolved.get("enum")
-
-                    changes.append(change_item)
+                if constraint.description.strip():
+                    applied, result_code = apply_description(target.schema_obj, constraint.name, constraint.description)
+                    metadata_result_counts[result_code] += 1
+                    if applied:
+                        applied_for_constraint = True
+                        counters["applied_changes"] += 1
+                        add_traceability(target.schema_obj, doc.filename)
+                        record_change(
+                            changes,
+                            doc=doc,
+                            spec_path=spec_path,
+                            method=method,
+                            field_name=constraint.name,
+                            section=constraint.section,
+                            target_kind=target.target_kind,
+                            change_type="description",
+                            source_value=constraint.description,
+                            target_value=constraint.description.strip(),
+                        )
 
             if applied_for_constraint:
                 counters["constraints_applied"] += 1
             else:
                 counters["constraints_not_applied"] += 1
+
+        success_examples = [example for example in doc.examples if example.kind == "success_response"]
+        if success_examples:
+            for spec_path, method, _, operation in matched_operations:
+                _, media_obj = get_response_media_target(spec, operation, "200")
+                if not isinstance(media_obj, dict):
+                    example_result_counts["missing_response_media"] += 1
+                    continue
+                if media_has_example(media_obj):
+                    example_result_counts["existing_response_example"] += 1
+                    continue
+
+                applied = False
+                for example in success_examples:
+                    parsed, error = parse_json_example_body(example.body)
+                    if parsed is None:
+                        example_result_counts[error or "invalid_response_example"] += 1
+                        add_review_note(
+                            review_notes,
+                            doc=doc,
+                            note_type="invalid_response_example",
+                            spec_path=spec_path,
+                            method=method,
+                            detail=error,
+                            source_value=example.body[:200],
+                        )
+                        continue
+
+                    media_obj["example"] = parsed
+                    add_traceability(media_obj, doc.filename)
+                    example_result_counts["applied_response_example"] += 1
+                    counters["applied_changes"] += 1
+                    applied = True
+                    record_change(
+                        changes,
+                        doc=doc,
+                        spec_path=spec_path,
+                        method=method,
+                        field_name=None,
+                        section="success_response",
+                        target_kind="response_media",
+                        change_type="response_example",
+                        target_value="application/json.example",
+                        media_type="application/json",
+                        status_code="200",
+                    )
+                    break
+
+                if not applied and success_examples:
+                    example_result_counts["response_example_not_applied"] += 1
+
+        sample_call_examples = [example for example in doc.examples if example.kind == "sample_call"]
+        if sample_call_examples:
+            for spec_path, method, _, operation in matched_operations:
+                media_targets = get_request_body_media_targets(spec, operation)
+                if not media_targets:
+                    example_result_counts["missing_request_media"] += 1
+                    continue
+
+                applied = False
+                for media_type, media_obj in media_targets:
+                    if media_has_example(media_obj):
+                        example_result_counts["existing_request_example"] += 1
+                        continue
+
+                    for example in sample_call_examples:
+                        parsed, result_code = extract_json_body_from_sample_call(example.body)
+                        if parsed is None:
+                            example_result_counts[result_code] += 1
+                            if result_code not in {"unsupported_sample_call_format", "empty_sample_call"}:
+                                add_review_note(
+                                    review_notes,
+                                    doc=doc,
+                                    note_type="invalid_request_example",
+                                    spec_path=spec_path,
+                                    method=method,
+                                    detail=result_code,
+                                    source_value=example.body[:200],
+                                )
+                            continue
+
+                        media_obj["example"] = parsed
+                        add_traceability(media_obj, doc.filename)
+                        example_result_counts["applied_request_example"] += 1
+                        counters["applied_changes"] += 1
+                        applied = True
+                        record_change(
+                            changes,
+                            doc=doc,
+                            spec_path=spec_path,
+                            method=method,
+                            field_name=None,
+                            section="sample_call",
+                            target_kind="request_media",
+                            change_type="request_example",
+                            target_value="requestBody.example",
+                            media_type=media_type,
+                        )
+                        break
+
+                    if applied:
+                        break
+
+                if not applied and sample_call_examples:
+                    example_result_counts["request_example_not_applied"] += 1
+
+        if doc.error_codes:
+            for spec_path, method, _, operation in matched_operations:
+                responses = operation.setdefault("responses", {})
+                if not isinstance(responses, dict):
+                    error_response_result_counts["invalid_responses_container"] += 1
+                    continue
+
+                for error_code in doc.error_codes:
+                    status_code = map_error_code_to_status(error_code.code)
+                    if status_code is None:
+                        error_response_result_counts["unmapped_error_code"] += 1
+                        add_review_note(
+                            review_notes,
+                            doc=doc,
+                            note_type="unmapped_error_code",
+                            spec_path=spec_path,
+                            method=method,
+                            detail="Could not map legacy error code to an HTTP status.",
+                            source_value=error_code.code,
+                        )
+                        continue
+
+                    if status_code in responses:
+                        error_response_result_counts["existing_error_response"] += 1
+                        continue
+
+                    response_description = error_code.description.strip() or f"Legacy error code {error_code.code}"
+                    responses[status_code] = {
+                        "description": response_description,
+                    }
+                    add_traceability(responses[status_code], doc.filename)
+                    error_response_result_counts["applied_error_response"] += 1
+                    counters["applied_changes"] += 1
+                    record_change(
+                        changes,
+                        doc=doc,
+                        spec_path=spec_path,
+                        method=method,
+                        field_name=None,
+                        section="error_response",
+                        target_kind="response",
+                        change_type="error_response",
+                        source_value=error_code.code,
+                        target_value=response_description,
+                        status_code=status_code,
+                    )
 
     return {
         "summary": {
@@ -758,13 +1361,29 @@ def apply_character_mapping(
             "constraints_applied": counters["constraints_applied"],
             "constraints_not_applied": counters["constraints_not_applied"],
             "applied_changes": counters["applied_changes"],
+            "response_examples_applied": example_result_counts["applied_response_example"],
+            "request_examples_applied": example_result_counts["applied_request_example"],
+            "error_responses_applied": error_response_result_counts["applied_error_response"],
+            "review_note_count": len(review_notes),
         },
         "action_counts": dict(sorted(action_counts.items())),
         "canonical_counts": dict(sorted(canonical_counts.items())),
         "write_result_counts": dict(sorted(write_result_counts.items())),
+        "metadata_result_counts": dict(sorted(metadata_result_counts.items())),
+        "example_result_counts": dict(sorted(example_result_counts.items())),
+        "error_response_result_counts": dict(sorted(error_response_result_counts.items())),
         "docs_without_path_match": sorted(docs_without_path_match),
         "changes": changes,
+        "needs_review": review_notes,
     }
+
+
+def apply_character_mapping(
+    spec: dict[str, Any],
+    docs: list[ScannedDoc],
+    mapping: dict[str, Any],
+) -> dict[str, Any]:
+    return apply_enrichment(spec, docs, mapping)
 
 
 def main() -> int:
@@ -793,7 +1412,7 @@ def main() -> int:
         output_path = args.output.resolve() if args.output else default_output_path(spec_path)
         output_backup = backup_existing_file(output_path)
 
-        apply_result = apply_character_mapping(spec, docs, mapping)
+        apply_result = apply_enrichment(spec, docs, mapping)
         write_spec(output_path, spec)
 
         report = {
