@@ -8,7 +8,7 @@ md/*
 tmp
 base_data/
 .tooling/
-result_data/enrich/*
+result_data/
 
 
 # Byte-compiled / optimized / DLL files

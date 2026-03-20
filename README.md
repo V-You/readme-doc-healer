@@ -97,6 +97,7 @@ pip install -e ".[dev]"
 # README_API_KEY=rdme_...     # optional - needed for push mode and live audit
 # PROJECT_NAME="..."          # display name for the local demo/input project
 # PROJECT_DIR="..."           # folder name under base_data/
+# PERSIST_RESULTS=false        # optional - persist heal/diagnose/audit JSON to result_data/
 
 # run the server
 readme-doc-healer
@@ -267,11 +268,17 @@ Missing examples in OpenAPI are flagged as **critical**, even when examples do e
 
 Heal does not call an LLM itself (architecture decision). It assembles structured context (spec fragment, legacy snippets, gap entries, extracted examples, param constraints, error codes) and hands it to the host LLM. If the model is weak, it may misinterprete "aA" for alphabetic input even when literal string "aA" is expected (example). The guardrail is human review before push.
 
-What reaches the end user? - **Only the ReadMe guide pages.** The `heal(push=true)` workflow creates/updates a **markdown guide page** on readme.io via the v2 API. It does NOT upload the OpenAPI spec to ReadMe. It modifies NO local files. End users see the healed documentation as ReadMe guide pages.
+What reaches the end user? - **Only the ReadMe guide pages.** The `heal(push=true)` workflow creates/updates a **markdown guide page** on readme.io via the v2 API. It does NOT upload the OpenAPI spec to ReadMe. By default it writes no local result files. When `PERSIST_RESULTS=true`, the tool responses are also written locally under `result_data/` for session recovery and regression tracking. End users still only see the ReadMe guide pages.
 
 #### Local store of wins
 
-Controlled by env var. Add details
+Set `PERSIST_RESULTS=true` in `.env` to persist tool output locally.
+
+- `heal` writes JSON snapshots to `result_data/heal/`
+- `diagnose` writes JSON snapshots to `result_data/diagnose/`
+- `audit` writes JSON snapshots to `result_data/audit/`
+- persisted filenames include a UTC timestamp plus a sanitized endpoint or tool name
+- when persistence is on, tool responses include a `persisted_to` field with the written path
 
 
 ## Tech stack

@@ -14,6 +14,7 @@ from .diagnose import run_diagnose
 from .heal import run_heal, run_heal_push
 from .audit import run_audit
 from .glossary import load_glossary
+from .persist import persist_result, format_persisted_path
 from .spec_parser import parse_spec
 from .mcp_apps import (
     render_gap_matrix,
@@ -60,6 +61,26 @@ def _resolve_local_inputs(
         "hint": "Set spec_path/docs_path explicitly, or add project files under base_data/<PROJECT_DIR>/.",
     }
     return None, None, None, json.dumps(error, indent=2)
+
+
+def _maybe_attach_persisted_to(
+    tool_name: str,
+    result: dict[str, Any],
+    *,
+    settings: Settings,
+    endpoint: str | None = None,
+    suffix: str = "",
+) -> dict[str, Any]:
+    written = persist_result(
+        tool_name,
+        result,
+        endpoint=endpoint,
+        suffix=suffix,
+        settings=settings,
+    )
+    if written is not None:
+        result["persisted_to"] = format_persisted_path(written)
+    return result
 
 
 @mcp.tool(
@@ -190,6 +211,8 @@ def diagnose(
             "markdown": report.to_markdown(),
         }
 
+    result = _maybe_attach_persisted_to("diagnose", result, settings=settings)
+
     return json.dumps(result, indent=2, default=str)
 
 
@@ -256,6 +279,13 @@ def heal(
             dry_run=dry_run,
             slug=slug,
         )
+        result = _maybe_attach_persisted_to(
+            "heal",
+            result,
+            settings=settings,
+            endpoint=endpoint,
+            suffix=".push",
+        )
         return json.dumps(result, indent=2, default=str)
 
     result = run_heal(
@@ -266,6 +296,7 @@ def heal(
         settings=settings,
         output_mode=output_mode,
     )
+    result = _maybe_attach_persisted_to("heal", result, settings=settings, endpoint=endpoint)
     return json.dumps(result, indent=2, default=str)
 
 
@@ -296,6 +327,7 @@ def audit(
         offline=offline,
         settings=settings,
     )
+    result = _maybe_attach_persisted_to("audit", result, settings=settings)
     return json.dumps(result, indent=2, default=str)
 
 

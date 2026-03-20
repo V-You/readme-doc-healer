@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     project_name: Optional[str] = None
     project_dir: Optional[str] = None
+    persist_results: bool = False
     heal_mode: str = "sectioned"
     readme_api_key: Optional[str] = None
     readme_branch: str = "stable"
