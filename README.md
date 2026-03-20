@@ -268,7 +268,8 @@ Controlled by env var. Add details
 
 ## See also
 
-- New [https://docs.readme.com/main/docs/readmes-mcp-server](ReadMe MCP server) that also supports work from directly within the dev's IDE
+- [https://docs.readme.com/main/docs/readmes-mcp-server](ReadMe's MCP server) that also supports working from directly within the dev's IDE
+- [https://readme.com/blog/mcp-servers](From IDE to AI: How ReadMe bridges APIs to LLMs with MCP)
 
 ---
 
