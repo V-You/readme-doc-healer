@@ -97,7 +97,7 @@ pip install -e ".[dev]"
 # README_API_KEY=rdme_...     # optional - needed for push mode and live audit
 # PROJECT_NAME="..."          # display name for the local demo/input project
 # PROJECT_DIR="..."           # folder name under base_data/
-# PERSIST_RESULTS=false        # optional - persist heal/diagnose/audit JSON to result_data/
+# PERSIST_RESULTS=false       # optional - persist heal/diagnose/audit JSON to result_data/
 
 # run the server
 readme-doc-healer
