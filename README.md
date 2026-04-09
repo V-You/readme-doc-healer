@@ -303,6 +303,7 @@ Set `PERSIST_RESULTS=true` in `.env` to persist tool output locally.
 
 - [https://docs.readme.com/main/docs/readmes-mcp-server](ReadMe's MCP server) that also supports working from directly within the dev's IDE
 - [https://readme.com/blog/mcp-servers](From IDE to AI: How ReadMe bridges APIs to LLMs with MCP)
+- See also [https://github.com/V-You/Web-API_Extension](Web-API_Extension), where the resulting enriched OpenAPI (plus aux files) is used to create a tool similar to [https://readme.com/blog/api-documentation-mcp-server-readme](readme.com/blog/api-documentation-mcp-server-readme) (but better ;)
 
 ---
 
