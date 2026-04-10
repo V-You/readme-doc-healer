@@ -10,6 +10,7 @@
 
 - Skills are located in `.github/skills/`
 - `validate-openapi` -- validate an OpenAPI spec for ReadMe import issues (wrong-category `$ref`, missing fields, unsupported features, etc.)
+- `troubleshoot-bidirectional-sync` -- troubleshoot ReadMe bi-directional sync issues (broken pages, 404s, blank nav entries, missing frontmatter, misplaced folders)
 
 # Code style and writing style
 
