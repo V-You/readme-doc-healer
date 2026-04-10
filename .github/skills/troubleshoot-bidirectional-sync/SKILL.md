@@ -282,20 +282,22 @@ def check_naming(docs_root):
 
 ### Step 6 -- compose customer response
 
-Write a response the SE can send to the customer. Include:
+Write a single, compact response the SE can send to the customer. Keep it
+concise -- the SE can always expand on details if needed.
 
-1. **What we found** -- describe each issue in plain language, referencing
-   the exact file path and what is wrong.
-2. **Why ReadMe behaves this way** -- briefly explain the structural rule
-   being violated (e.g., `_order.yaml` must reference items at the same
-   folder level, frontmatter must have closing `---`).
-3. **How to fix it** -- give the exact edits: file to create, lines to add
-   or remove, content to change. Provide diffs where helpful.
-4. **How to verify** -- after pushing the fix to the repo, the sync should
-   pick it up within a few minutes. They can also check the ReadMe
-   dashboard for sync status/errors.
-5. **Links** -- include relevant ReadMe docs links from the background
-   section above.
+Structure:
+1. **Summary table** -- one row per issue: file path, what is wrong, fix.
+2. **Fix steps** -- a short numbered list of the exact edits (files to
+   create/change, lines to add/remove). No code fences around YAML
+   one-liners; use inline `backticks` instead. Use diffs only for
+   multi-line frontmatter fixes where context helps.
+3. **Verification** -- one sentence: push the changes, wait a few minutes
+   for sync, and check the ReadMe dashboard for errors.
+4. **Links** -- list relevant ReadMe docs links from the background section.
+
+Do NOT repeat verification instructions per issue -- put them once at the
+end. Do NOT wrap the entire response in a blockquote. Avoid deeply nested
+formatting (blockquote + code fence + YAML) -- it renders poorly.
 
 ## Common issue patterns (cheat sheet)
 
