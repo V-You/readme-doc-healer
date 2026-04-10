@@ -9,6 +9,7 @@
 # Skills
 
 - Skills are located in `.github/skills/`
+- `validate-openapi` -- validate an OpenAPI spec for ReadMe import issues (wrong-category `$ref`, missing fields, unsupported features, etc.)
 
 # Code style and writing style
 
